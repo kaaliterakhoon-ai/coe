@@ -207,6 +207,9 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				}
 
 				fmt.Fprintf(w, "pipeline result: transcript=%q corrected=%q\n", processed.Transcript, processed.Corrected)
+				if processed.TranscriptWarning != "" {
+					fmt.Fprintf(w, "transcript warning: %s\n", processed.TranscriptWarning)
+				}
 				if processed.CorrectionWarning != "" {
 					fmt.Fprintf(w, "correction warning: %s\n", processed.CorrectionWarning)
 				}

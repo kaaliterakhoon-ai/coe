@@ -21,6 +21,7 @@ type Orchestrator struct {
 type Result struct {
 	ByteCount         int
 	Transcript        string
+	TranscriptWarning string
 	Corrected         string
 	CorrectionWarning string
 	Output            output.Delivery
@@ -53,6 +54,10 @@ func (o Orchestrator) ProcessCapture(ctx context.Context, capture audio.Result) 
 		return Result{}, err
 	}
 	result.Transcript = transcribed.Text
+	if strings.TrimSpace(result.Transcript) == "" {
+		result.TranscriptWarning = "ASR returned empty transcript; skipped correction and output"
+		return result, nil
+	}
 
 	corrected, err := o.Corrector.Correct(ctx, transcribed.Text)
 	if err != nil {
