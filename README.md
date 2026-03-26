@@ -23,6 +23,12 @@ Important limits in the current codebase:
 - portal-backed auto-paste is implemented but not yet validated end-to-end on a real GNOME target
 - `ydotool` remains the command-line paste fallback
 
+Portal access persistence:
+
+- when `persist_portal_access` is `true`, the app stores the portal restore token locally
+- after the first successful authorization, later runs should reuse that token instead of prompting every time
+- if GNOME or the portal backend rejects the stored token, the app falls back to a fresh authorization flow
+
 ## Requirements
 
 - Wayland session

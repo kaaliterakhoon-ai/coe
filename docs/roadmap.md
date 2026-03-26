@@ -113,10 +113,14 @@ Status:
 
 Deliverables:
 
-- Restore token persistence
 - Better status UX
 - Packaging / installation story
 - Logs and diagnostics improvements
+
+Status:
+
+- restore token persistence implemented for portal output sessions
+- remaining work is packaging, installation, and UX polish
 
 ### M6: compositor expansion
 

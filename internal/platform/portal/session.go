@@ -146,3 +146,12 @@ func variantUint32(results map[string]dbus.Variant, key string) (uint32, bool) {
 	number, ok := value.Value().(uint32)
 	return number, ok
 }
+
+func variantString(results map[string]dbus.Variant, key string) (string, bool) {
+	value, ok := results[key]
+	if !ok {
+		return "", false
+	}
+	text, ok := value.Value().(string)
+	return text, ok
+}

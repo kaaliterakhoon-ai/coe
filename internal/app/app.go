@@ -15,6 +15,7 @@ import (
 	"coe/internal/llm"
 	"coe/internal/output"
 	"coe/internal/pipeline"
+	"coe/internal/state"
 )
 
 type App struct {
@@ -57,6 +58,15 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		}
 	}
 
+	var portalStateStore *state.Store
+	if cfg.Output.PersistPortalAccess && caps.Portals.RemoteDesktop.Version >= 2 {
+		statePath, err := state.ResolvePath()
+		if err != nil {
+			return nil, err
+		}
+		portalStateStore = state.NewStore(statePath)
+	}
+
 	description := describeFeature(string(caps.Hotkey.Mode), caps.Hotkey.Detail)
 	service := hotkey.Service(hotkey.PlannedService{Description: description})
 	var external *hotkey.ExternalTriggerService
@@ -84,13 +94,15 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			ASR:       asrClient,
 			Corrector: corrector,
 			Output: &output.Coordinator{
-				ClipboardPlan:      describeFeature(string(caps.Clipboard.Mode), caps.Clipboard.Detail),
-				PastePlan:          describeFeature(string(caps.Paste.Mode), caps.Paste.Detail),
-				ClipboardBinary:    clipboardBinary,
-				PasteBinary:        pasteBinary,
-				EnableAutoPaste:    cfg.Output.EnableAutoPaste,
-				UsePortalClipboard: caps.Clipboard.Mode == capabilities.ModePortal,
-				UsePortalPaste:     caps.Paste.Mode == capabilities.ModePortal,
+				ClipboardPlan:       describeFeature(string(caps.Clipboard.Mode), caps.Clipboard.Detail),
+				PastePlan:           describeFeature(string(caps.Paste.Mode), caps.Paste.Detail),
+				ClipboardBinary:     clipboardBinary,
+				PasteBinary:         pasteBinary,
+				EnableAutoPaste:     cfg.Output.EnableAutoPaste,
+				UsePortalClipboard:  caps.Clipboard.Mode == capabilities.ModePortal,
+				UsePortalPaste:      caps.Paste.Mode == capabilities.ModePortal,
+				PersistPortalAccess: cfg.Output.PersistPortalAccess && caps.Portals.RemoteDesktop.Version >= 2,
+				PortalStateStore:    portalStateStore,
 			},
 		},
 	}

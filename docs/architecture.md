@@ -34,6 +34,7 @@ What is implemented now:
 - OpenAI LLM corrector
 - `wl-copy` clipboard delivery
 - portal-backed output session wiring for clipboard and auto-paste
+- portal restore-token persistence for `RemoteDesktop` sessions
 
 What is not implemented yet:
 
@@ -281,6 +282,11 @@ Responsibility:
 
 - Persist portal restore tokens if the desktop backend supports them.
 - Store local state such as preferred trigger and output mode.
+
+Current implementation:
+
+- `RemoteDesktop` restore token is stored locally when portal persistence is enabled
+- later runs reuse that token to avoid repeated authorization prompts when the backend accepts restoration
 
 ## 9. State machine
 

@@ -27,7 +27,15 @@ const (
 	keyStatePressed                   uint32 = 1
 	leftCtrlKeysym                           = 0xffe3
 	vKeysym                                  = 0x0076
+	persistModeExplicitlyRevoked      uint32 = 2
 )
+
+type OutputSessionOptions struct {
+	WantClipboard bool
+	WantKeyboard  bool
+	PersistAccess bool
+	RestoreToken  string
+}
 
 type RemoteDesktopOutputSession struct {
 	client *Client
@@ -35,6 +43,7 @@ type RemoteDesktopOutputSession struct {
 	sessionHandle    dbus.ObjectPath
 	keyboardGranted  bool
 	clipboardEnabled bool
+	restoreToken     string
 
 	signalCh   chan *dbus.Signal
 	closedCh   chan struct{}
@@ -43,7 +52,7 @@ type RemoteDesktopOutputSession struct {
 	clipboard  string
 }
 
-func (c *Client) CreateRemoteDesktopOutputSession(ctx context.Context, wantClipboard, wantKeyboard bool) (*RemoteDesktopOutputSession, error) {
+func (c *Client) CreateRemoteDesktopOutputSession(ctx context.Context, options OutputSessionOptions) (*RemoteDesktopOutputSession, error) {
 	uniqueName, err := c.uniqueName()
 	if err != nil {
 		return nil, err
@@ -54,26 +63,26 @@ func (c *Client) CreateRemoteDesktopOutputSession(ctx context.Context, wantClipb
 		return nil, err
 	}
 
-	if wantKeyboard {
-		if err := c.selectRemoteDesktopDevices(ctx, uniqueName, sessionHandle, keyboardDeviceType); err != nil {
+	if options.WantKeyboard {
+		if err := c.selectRemoteDesktopDevices(ctx, uniqueName, sessionHandle, options); err != nil {
 			return nil, errors.Join(err, c.closeSession(sessionHandle))
 		}
 	}
 
-	if wantClipboard {
+	if options.WantClipboard {
 		if err := c.requestClipboard(ctx, sessionHandle); err != nil {
 			return nil, errors.Join(err, c.closeSession(sessionHandle))
 		}
 	}
 
-	devices, clipboardEnabled, err := c.startRemoteDesktop(ctx, uniqueName, sessionHandle)
+	devices, clipboardEnabled, restoreToken, err := c.startRemoteDesktop(ctx, uniqueName, sessionHandle)
 	if err != nil {
 		return nil, errors.Join(err, c.closeSession(sessionHandle))
 	}
-	if wantKeyboard && devices&keyboardDeviceType == 0 {
+	if options.WantKeyboard && devices&keyboardDeviceType == 0 {
 		return nil, errors.Join(fmt.Errorf("portal session started without keyboard permission"), c.closeSession(sessionHandle))
 	}
-	if wantClipboard && !clipboardEnabled {
+	if options.WantClipboard && !clipboardEnabled {
 		return nil, errors.Join(fmt.Errorf("portal session started without clipboard permission"), c.closeSession(sessionHandle))
 	}
 
@@ -82,10 +91,11 @@ func (c *Client) CreateRemoteDesktopOutputSession(ctx context.Context, wantClipb
 		sessionHandle:    sessionHandle,
 		keyboardGranted:  devices&keyboardDeviceType != 0,
 		clipboardEnabled: clipboardEnabled,
+		restoreToken:     restoreToken,
 		closedCh:         make(chan struct{}),
 	}
 
-	if wantClipboard {
+	if options.WantClipboard {
 		match := []dbus.MatchOption{
 			dbus.WithMatchSender(DesktopBusName),
 			dbus.WithMatchInterface(ClipboardInterface),
@@ -104,6 +114,13 @@ func (c *Client) CreateRemoteDesktopOutputSession(ctx context.Context, wantClipb
 	}
 
 	return session, nil
+}
+
+func (s *RemoteDesktopOutputSession) RestoreToken() string {
+	if s == nil {
+		return ""
+	}
+	return s.restoreToken
 }
 
 func (s *RemoteDesktopOutputSession) SetClipboard(ctx context.Context, text string) error {
@@ -296,7 +313,7 @@ func (c *Client) createRemoteDesktopSession(ctx context.Context, uniqueName stri
 	return sessionHandle, nil
 }
 
-func (c *Client) selectRemoteDesktopDevices(ctx context.Context, uniqueName string, sessionHandle dbus.ObjectPath, deviceTypes uint32) error {
+func (c *Client) selectRemoteDesktopDevices(ctx context.Context, uniqueName string, sessionHandle dbus.ObjectPath, sessionOptions OutputSessionOptions) error {
 	signalCh, cleanup, err := c.watchRequestResponses(ctx, uniqueName)
 	if err != nil {
 		return err
@@ -307,7 +324,13 @@ func (c *Client) selectRemoteDesktopDevices(ctx context.Context, uniqueName stri
 	var handle dbus.ObjectPath
 	options := map[string]dbus.Variant{
 		"handle_token": dbus.MakeVariant(handleToken),
-		"types":        dbus.MakeVariant(deviceTypes),
+		"types":        dbus.MakeVariant(keyboardDeviceType),
+	}
+	if sessionOptions.PersistAccess {
+		options["persist_mode"] = dbus.MakeVariant(persistModeExplicitlyRevoked)
+	}
+	if sessionOptions.RestoreToken != "" {
+		options["restore_token"] = dbus.MakeVariant(sessionOptions.RestoreToken)
 	}
 	if err := c.obj.CallWithContext(ctx, RemoteDesktopSelectDevicesMethod, 0, sessionHandle, options).Store(&handle); err != nil {
 		return err
@@ -324,10 +347,10 @@ func (c *Client) requestClipboard(ctx context.Context, sessionHandle dbus.Object
 	return c.obj.CallWithContext(ctx, ClipboardRequestClipboardMethod, 0, sessionHandle, map[string]dbus.Variant{}).Store()
 }
 
-func (c *Client) startRemoteDesktop(ctx context.Context, uniqueName string, sessionHandle dbus.ObjectPath) (uint32, bool, error) {
+func (c *Client) startRemoteDesktop(ctx context.Context, uniqueName string, sessionHandle dbus.ObjectPath) (uint32, bool, string, error) {
 	signalCh, cleanup, err := c.watchRequestResponses(ctx, uniqueName)
 	if err != nil {
-		return 0, false, err
+		return 0, false, "", err
 	}
 	defer cleanup()
 
@@ -338,7 +361,7 @@ func (c *Client) startRemoteDesktop(ctx context.Context, uniqueName string, sess
 
 	var handle dbus.ObjectPath
 	if err := c.obj.CallWithContext(ctx, RemoteDesktopStartMethod, 0, sessionHandle, "", options).Store(&handle); err != nil {
-		return 0, false, err
+		return 0, false, "", err
 	}
 	if handle == "" {
 		handle = requestPath(uniqueName, handleToken)
@@ -346,12 +369,13 @@ func (c *Client) startRemoteDesktop(ctx context.Context, uniqueName string, sess
 
 	response, err := awaitRequestResponse(ctx, signalCh, handle)
 	if err != nil {
-		return 0, false, err
+		return 0, false, "", err
 	}
 
 	devices, _ := variantUint32(response.Results, "devices")
 	clipboardEnabled, _ := variantBool(response.Results, "clipboard_enabled")
-	return devices, clipboardEnabled, nil
+	restoreToken, _ := variantString(response.Results, "restore_token")
+	return devices, clipboardEnabled, restoreToken, nil
 }
 
 func (c *Client) closeSession(sessionHandle dbus.ObjectPath) error {

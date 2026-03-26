@@ -10,30 +10,36 @@ import (
 	"time"
 
 	"coe/internal/platform/portal"
+	"coe/internal/state"
 )
 
 type PortalSession interface {
 	SetClipboard(context.Context, string) error
 	SendPaste(context.Context) error
 	Close() error
+	RestoreToken() string
 }
 
 type PortalFactory func(context.Context, PortalRequest) (PortalSession, error)
 
 type PortalRequest struct {
-	Clipboard bool
-	Paste     bool
+	Clipboard    bool
+	Paste        bool
+	Persist      bool
+	RestoreToken string
 }
 
 type Coordinator struct {
-	ClipboardPlan      string
-	PastePlan          string
-	ClipboardBinary    string
-	PasteBinary        string
-	EnableAutoPaste    bool
-	UsePortalClipboard bool
-	UsePortalPaste     bool
-	PortalFactory      PortalFactory
+	ClipboardPlan       string
+	PastePlan           string
+	ClipboardBinary     string
+	PasteBinary         string
+	EnableAutoPaste     bool
+	UsePortalClipboard  bool
+	UsePortalPaste      bool
+	PersistPortalAccess bool
+	PortalFactory       PortalFactory
+	PortalStateStore    *state.Store
 
 	portalMu sync.Mutex
 	portal   PortalSession
@@ -201,13 +207,16 @@ func (c *Coordinator) ensurePortal(ctx context.Context) (PortalSession, error) {
 	}
 
 	session, err := factory(ctx, PortalRequest{
-		Clipboard: c.UsePortalClipboard,
-		Paste:     c.EnableAutoPaste && c.UsePortalPaste,
+		Clipboard:    c.UsePortalClipboard,
+		Paste:        c.EnableAutoPaste && c.UsePortalPaste,
+		Persist:      c.PersistPortalAccess,
+		RestoreToken: c.loadRestoreToken(),
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	c.saveRestoreToken(session.RestoreToken())
 	c.portal = session
 	return c.portal, nil
 }
@@ -218,11 +227,38 @@ func defaultPortalFactory(ctx context.Context, request PortalRequest) (PortalSes
 		return nil, err
 	}
 
-	session, err := client.CreateRemoteDesktopOutputSession(ctx, request.Clipboard, request.Paste)
+	session, err := client.CreateRemoteDesktopOutputSession(ctx, portal.OutputSessionOptions{
+		WantClipboard: request.Clipboard,
+		WantKeyboard:  request.Paste,
+		PersistAccess: request.Persist,
+		RestoreToken:  request.RestoreToken,
+	})
 	if err != nil {
 		_ = client.Close()
 		return nil, err
 	}
 
 	return session, nil
+}
+
+func (c *Coordinator) loadRestoreToken() string {
+	if !c.PersistPortalAccess || c.PortalStateStore == nil {
+		return ""
+	}
+
+	current, err := c.PortalStateStore.Load()
+	if err != nil {
+		return ""
+	}
+	return current.RemoteDesktopRestoreToken
+}
+
+func (c *Coordinator) saveRestoreToken(token string) {
+	if !c.PersistPortalAccess || c.PortalStateStore == nil || strings.TrimSpace(token) == "" {
+		return
+	}
+
+	_ = c.PortalStateStore.Save(state.PortalAccess{
+		RemoteDesktopRestoreToken: token,
+	})
 }
