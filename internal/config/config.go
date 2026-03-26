@@ -88,7 +88,7 @@ func Default() Config {
 		Hotkey: HotkeyConfig{
 			Name:                 "coe-trigger",
 			Description:          "Press and hold to start dictation.",
-			PreferredAccelerator: "<Super>space",
+			PreferredAccelerator: "<Shift><Super>d",
 		},
 		Audio: AudioConfig{
 			RecorderBinary: "pw-record",

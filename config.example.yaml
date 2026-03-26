@@ -14,7 +14,7 @@ hotkey:
   description: Press and hold to start dictation.
   # Preferred accelerator. On GNOME fallback, Coe will try to register this
   # binding as a custom shortcut that runs `coe trigger toggle`.
-  preferred_accelerator: <Super>space
+  preferred_accelerator: <Shift><Super>d
 
 # Local microphone capture settings.
 audio:

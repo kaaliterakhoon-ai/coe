@@ -20,7 +20,7 @@ func TestEnsureTriggerShortcutCreatesNewBinding(t *testing.T) {
 	if err := manager.ensure(context.Background(), Shortcut{
 		Name:    "coe-trigger",
 		Command: "/home/test/.local/bin/coe trigger toggle",
-		Binding: "<Super>space",
+		Binding: "<Shift><Super>d",
 	}); err != nil {
 		t.Fatalf("ensure() error = %v", err)
 	}
@@ -43,7 +43,7 @@ func TestEnsureTriggerShortcutUpdatesExistingBindingWithoutAppending(t *testing.
 			joinKey("gsettings", "get", mediaKeysSchema, "custom-keybindings"): fmt.Sprintf("['%s']", path),
 			joinKey("gsettings", "get", schemaForPath(path), "name"):           "'coe-trigger'",
 			joinKey("gsettings", "get", schemaForPath(path), "command"):        "'/old/path/coe trigger toggle'",
-			joinKey("gsettings", "get", schemaForPath(path), "binding"):        "'<Super>space'",
+			joinKey("gsettings", "get", schemaForPath(path), "binding"):        "'<Shift><Super>d'",
 		},
 	}
 	manager := ShortcutManager{runner: runner}
@@ -51,7 +51,7 @@ func TestEnsureTriggerShortcutUpdatesExistingBindingWithoutAppending(t *testing.
 	if err := manager.ensure(context.Background(), Shortcut{
 		Name:    "coe-trigger",
 		Command: "/home/test/.local/bin/coe trigger toggle",
-		Binding: "<Super>space",
+		Binding: "<Shift><Super>d",
 	}); err != nil {
 		t.Fatalf("ensure() error = %v", err)
 	}
@@ -61,7 +61,7 @@ func TestEnsureTriggerShortcutUpdatesExistingBindingWithoutAppending(t *testing.
 			t.Fatalf("did not expect list append, got call %v", call)
 		}
 	}
-	if got := runner.values[joinKey("gsettings", "set", schemaForPath(path), "binding", "'<Super>space'")]; got != "ok" {
+	if got := runner.values[joinKey("gsettings", "set", schemaForPath(path), "binding", "'<Shift><Super>d'")]; got != "ok" {
 		t.Fatalf("expected binding update, got %q", got)
 	}
 }
