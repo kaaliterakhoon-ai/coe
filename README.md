@@ -1,14 +1,16 @@
-# COE
+# COE (聲)
 
-GNOME-first, Wayland-first dictation assistant in Go.
+COE is a dictation tool for GNOME on Wayland, written in Go.
+
+It is a Linux-focused recreation of [`missuo/koe`](https://github.com/missuo/koe). The goal is the same: capture speech, transcribe it, clean up the text, and put the result back into the active app.
 
 ## Current status
 
-The repository is no longer only a skeleton. The currently verified path is:
+The verified path today is:
 
 `GNOME custom shortcut -> coe trigger toggle -> pw-record -> OpenAI ASR -> OpenAI LLM correction -> portal clipboard -> portal auto-paste`
 
-Validated so far:
+What works:
 
 - GNOME Wayland fallback trigger via `coe trigger toggle`
 - microphone capture through `pw-record`
@@ -20,22 +22,22 @@ Validated so far:
 - severely clipped or corrupted recordings are short-circuited locally before ASR
 - command-line fallbacks through `wl-copy` and `ydotool`
 
-Important limits in the current codebase:
+What does not exist yet:
 
 - `GlobalShortcuts` portal is not implemented yet
 - `ydotool` remains the command-line paste fallback
 
 Portal access persistence:
 
-- when `persist_portal_access` is `true`, the app stores the portal restore token locally
-- after the first successful authorization, later runs should reuse that token instead of prompting every time
-- if GNOME or the portal backend rejects the stored token, the app falls back to a fresh authorization flow
+- If `persist_portal_access` is `true`, COE stores the portal restore token locally.
+- After the first successful authorization, later runs should reuse that token instead of prompting every time.
+- If GNOME or the portal backend rejects the stored token, COE falls back to a fresh authorization flow.
 
 System notifications:
 
-- by default, COE emits GNOME desktop notifications for completed dictation and failure cases
-- near-silent or corrupt captures are reported locally and skipped before network transcription
-- recording-start notifications stay off by default to avoid spamming every trigger cycle
+- By default, COE sends GNOME desktop notifications for completed dictation and failure cases.
+- Near-silent or corrupt captures are reported locally and skipped before network transcription.
+- Recording-start notifications stay off by default.
 
 ## Requirements
 
@@ -51,13 +53,13 @@ Optional:
 
 ## Quick start
 
-Initialize config:
+Create a config file:
 
 ```bash
 go run ./cmd/coe config init
 ```
 
-This writes the default config to `~/.config/coe/config.yaml` unless `COE_CONFIG` overrides the path.
+This writes the default config to `~/.config/coe/config.yaml`, unless `COE_CONFIG` overrides the path.
 
 Export your OpenAI API key:
 
@@ -65,7 +67,7 @@ Export your OpenAI API key:
 export OPENAI_API_KEY=...
 ```
 
-Inspect runtime capabilities:
+Check runtime capabilities:
 
 ```bash
 go run ./cmd/coe doctor
@@ -77,19 +79,19 @@ Start the daemon:
 go run ./cmd/coe serve
 ```
 
-Trigger dictation manually:
+Trigger dictation by hand:
 
 ```bash
 go run ./cmd/coe trigger toggle
 ```
 
-On GNOME Wayland without `GlobalShortcuts`, add a GNOME custom shortcut that runs:
+If GNOME Wayland does not expose `GlobalShortcuts`, add a GNOME custom shortcut that runs:
 
 ```bash
 coe trigger toggle
 ```
 
-## Install As User Service
+## Install As A User Service
 
 To install the current alpha as a persistent user service:
 
@@ -97,13 +99,13 @@ To install the current alpha as a persistent user service:
 ./scripts/install-user.sh
 ```
 
-That installs:
+The script installs:
 
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
 - `~/.config/coe/env`
 
-Then put your OpenAI key into `~/.config/coe/env` and restart:
+Then put your OpenAI key into `~/.config/coe/env` and restart the service:
 
 ```bash
 systemctl --user restart coe.service
@@ -111,32 +113,32 @@ systemctl --user restart coe.service
 
 ## Defaults
 
-ASR defaults:
+ASR:
 
 - endpoint: `https://api.openai.com/v1/audio/transcriptions`
 - model: `gpt-4o-mini-transcribe`
 - api key env: `OPENAI_API_KEY`
 
-LLM correction defaults:
+LLM correction:
 
 - endpoint: `https://api.openai.com/v1/responses`
 - model: `gpt-4o-mini`
 - api key env: `OPENAI_API_KEY`
 
-Audio defaults:
+Audio:
 
 - recorder: `pw-record`
 - sample rate: `16000`
 - channels: `1`
 - format: `s16`
 
-Output defaults:
+Output:
 
 - clipboard: `wl-copy`
 - clipboard and paste will prefer portal paths when the runtime exposes them
 - `wl-copy` and `ydotool` remain command-line fallbacks
 
-Notification defaults:
+Notifications:
 
 - `enable_system: true`
 - `show_text_preview: true`
