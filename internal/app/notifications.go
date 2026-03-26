@@ -2,8 +2,7 @@ package app
 
 import (
 	"context"
-	"fmt"
-	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 
 const notificationTimeout = 3 * time.Second
 
-func (a *App) emitNotification(w io.Writer, msg notify.Message) {
+func (a *App) emitNotification(logger *slog.Logger, msg notify.Message) {
 	if a.Notifier == nil || msg.Title == "" {
 		return
 	}
@@ -22,7 +21,7 @@ func (a *App) emitNotification(w io.Writer, msg notify.Message) {
 	defer cancel()
 
 	if err := a.Notifier.Send(ctx, msg); err != nil {
-		fmt.Fprintf(w, "notification warning: %v\n", err)
+		logger.Warn("notification warning", "error", err)
 	}
 }
 

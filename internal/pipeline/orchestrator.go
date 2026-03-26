@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"coe/internal/asr"
 	"coe/internal/audio"
@@ -19,13 +20,17 @@ type Orchestrator struct {
 }
 
 type Result struct {
-	ByteCount         int
-	AudioActivity     audio.Activity
-	Transcript        string
-	TranscriptWarning string
-	Corrected         string
-	CorrectionWarning string
-	Output            output.Delivery
+	ByteCount          int
+	AudioActivity      audio.Activity
+	Transcript         string
+	TranscriptWarning  string
+	Corrected          string
+	CorrectionWarning  string
+	Output             output.Delivery
+	ASRDuration        time.Duration
+	CorrectionDuration time.Duration
+	OutputDuration     time.Duration
+	TotalDuration      time.Duration
 }
 
 func (o Orchestrator) Summary() string {
@@ -43,24 +48,30 @@ func (o Orchestrator) Summary() string {
 }
 
 func (o Orchestrator) ProcessCapture(ctx context.Context, capture audio.Result) (Result, error) {
+	startedAt := time.Now()
 	result := Result{
 		ByteCount: capture.ByteCount,
 	}
 	if capture.ByteCount == 0 {
+		result.TotalDuration = time.Since(startedAt)
 		return result, nil
 	}
 
 	result.AudioActivity = audio.AnalyzeActivity(capture, audio.DefaultActivityThresholds())
 	if result.AudioActivity.Supported && result.AudioActivity.ApproxSilent {
 		result.TranscriptWarning = "captured audio is near-silent; skipped transcription"
+		result.TotalDuration = time.Since(startedAt)
 		return result, nil
 	}
 	if result.AudioActivity.Supported && result.AudioActivity.ApproxCorrupt {
 		result.TranscriptWarning = "captured audio appears saturated or corrupted; skipped transcription"
+		result.TotalDuration = time.Since(startedAt)
 		return result, nil
 	}
 
+	asrStartedAt := time.Now()
 	transcribed, err := o.ASR.Transcribe(ctx, capture)
+	result.ASRDuration = time.Since(asrStartedAt)
 	if err != nil {
 		return Result{}, err
 	}
@@ -72,10 +83,13 @@ func (o Orchestrator) ProcessCapture(ctx context.Context, capture audio.Result) 
 		if result.TranscriptWarning == "" {
 			result.TranscriptWarning = "ASR returned empty transcript; skipped correction and output"
 		}
+		result.TotalDuration = time.Since(startedAt)
 		return result, nil
 	}
 
+	correctionStartedAt := time.Now()
 	corrected, err := o.Corrector.Correct(ctx, transcribed.Text)
+	result.CorrectionDuration = time.Since(correctionStartedAt)
 	if err != nil {
 		result.CorrectionWarning = err.Error()
 		result.Corrected = transcribed.Text
@@ -90,12 +104,15 @@ func (o Orchestrator) ProcessCapture(ctx context.Context, capture audio.Result) 
 	}
 
 	if o.Output != nil {
+		outputStartedAt := time.Now()
 		delivery, err := o.Output.Deliver(ctx, result.Corrected)
+		result.OutputDuration = time.Since(outputStartedAt)
 		if err != nil {
 			return Result{}, err
 		}
 		result.Output = delivery
 	}
 
+	result.TotalDuration = time.Since(startedAt)
 	return result, nil
 }

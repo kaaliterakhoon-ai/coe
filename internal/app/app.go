@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"strings"
 	"time"
 
 	"coe/internal/asr"
@@ -136,18 +138,23 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 		}
 	}()
 
-	fmt.Fprintln(w, "coe skeleton starting")
-	fmt.Fprintln(w, a.Caps.Report())
-	fmt.Fprintf(w, "hotkey wiring: %s\n", a.Hotkey.Plan())
-	fmt.Fprintf(w, "pipeline wiring: %s\n", a.Pipeline.Summary())
-	fmt.Fprintf(w, "notification wiring: %s\n", blankIfEmpty(a.Notifier.Summary(), "disabled"))
+	logger := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{}))
+
+	logger.Info("coe starting")
+	logger.Info("runtime capabilities", "report", strings.TrimSpace(a.Caps.Report()))
+	wiringAttrs := []any{
+		"hotkey", a.Hotkey.Plan(),
+		"pipeline", a.Pipeline.Summary(),
+		"notifications", blankIfEmpty(a.Notifier.Summary(), "disabled"),
+	}
 	if a.ControlSocketPath != "" {
-		fmt.Fprintf(w, "control socket: %s\n", a.ControlSocketPath)
+		wiringAttrs = append(wiringAttrs, "control_socket", a.ControlSocketPath)
 	}
+	logger.Info("runtime wiring", wiringAttrs...)
 	for _, warning := range a.StartupWarnings {
-		fmt.Fprintf(w, "startup warning: %s\n", warning)
+		logger.Warn("startup warning", "warning", warning)
 	}
-	fmt.Fprintln(w, "runtime is scaffolded; waiting for signal")
+	logger.Info("runtime is scaffolded; waiting for signal")
 
 	var controlErrCh chan error
 	if a.ExternalHotkey != nil {
@@ -177,12 +184,12 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				result, stopErr := captureSession.Stop(stopCtx)
 				cancel()
 				if stopErr != nil {
-					fmt.Fprintf(w, "recording stop during shutdown failed: %v\n", stopErr)
+					logger.Warn("recording stop during shutdown failed", "error", stopErr)
 				} else {
-					fmt.Fprintf(w, "recording finalized during shutdown: bytes=%d duration=%s\n", result.ByteCount, result.Duration.Round(time.Millisecond))
+					logger.Info("recording finalized during shutdown", "bytes", result.ByteCount, "duration", result.Duration.Round(time.Millisecond))
 				}
 			}
-			fmt.Fprintln(w, "shutting down")
+			logger.Info("shutting down")
 			return nil
 		case err := <-controlErrCh:
 			if err != nil {
@@ -191,29 +198,29 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			controlErrCh = nil
 		case event, ok := <-events:
 			if !ok {
-				fmt.Fprintln(w, "hotkey service stopped")
+				logger.Info("hotkey service stopped")
 				return nil
 			}
 			switch event.Type {
 			case hotkey.Activated:
 				if captureSession != nil {
-					fmt.Fprintln(w, "recording already active; ignoring activate event")
+					logger.Warn("recording already active; ignoring activate event")
 					continue
 				}
 
 				session, err := a.Pipeline.Recorder.Start(ctx)
 				if err != nil {
-					fmt.Fprintf(w, "recording start failed: %v\n", err)
-					a.emitNotification(w, notificationForFailure("Recording failed to start", err))
+					logger.Error("recording start failed", "error", err)
+					a.emitNotification(logger, notificationForFailure("Recording failed to start", err))
 					continue
 				}
 
 				captureSession = session
-				fmt.Fprintln(w, "recording started")
-				a.emitNotification(w, a.notificationForStart())
+				logger.Info("recording started")
+				a.emitNotification(logger, a.notificationForStart())
 			case hotkey.Deactivated:
 				if captureSession == nil {
-					fmt.Fprintln(w, "recording is not active; ignoring deactivate event")
+					logger.Warn("recording is not active; ignoring deactivate event")
 					continue
 				}
 
@@ -222,55 +229,69 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				cancel()
 				captureSession = nil
 				if err != nil && result.ByteCount == 0 {
-					fmt.Fprintf(w, "recording stop failed: %v\n", err)
+					stopAttrs := []any{"error", err}
 					if result.Stderr != "" {
-						fmt.Fprintf(w, "recording stderr: %q\n", result.Stderr)
+						stopAttrs = append(stopAttrs, "stderr", result.Stderr)
 					}
-					a.emitNotification(w, notificationForFailure("Recording failed", err))
+					logger.Error("recording stop failed", stopAttrs...)
+					a.emitNotification(logger, notificationForFailure("Recording failed", err))
 					continue
 				}
 				if err != nil {
-					fmt.Fprintf(w, "recording stop returned warning: %v\n", err)
+					logger.Warn("recording stop returned warning", "error", err)
 				}
 
-				fmt.Fprintf(w, "recording stopped: bytes=%d duration=%s\n", result.ByteCount, result.Duration.Round(time.Millisecond))
+				recordingAttrs := []any{
+					"bytes", result.ByteCount,
+					"duration", result.Duration.Round(time.Millisecond),
+				}
 				activity := processedActivityPreview(result)
 				if activity != "" {
-					fmt.Fprintf(w, "audio activity: %s\n", activity)
+					recordingAttrs = append(recordingAttrs, "audio_activity", activity)
 				}
 				if result.Stderr != "" {
-					fmt.Fprintf(w, "recording stderr: %q\n", result.Stderr)
+					recordingAttrs = append(recordingAttrs, "stderr", result.Stderr)
 				}
+				logger.Info("recording stopped", recordingAttrs...)
 
 				processed, err := a.Pipeline.ProcessCapture(ctx, result)
 				if err != nil {
-					fmt.Fprintf(w, "pipeline processing failed: %v\n", err)
-					a.emitNotification(w, notificationForFailure("Dictation failed", err))
+					logger.Error("pipeline processing failed", "error", err)
+					a.emitNotification(logger, notificationForFailure("Dictation failed", err))
 					continue
 				}
 
-				fmt.Fprintf(w, "pipeline result: transcript=%q corrected=%q\n", processed.Transcript, processed.Corrected)
-				if processed.AudioActivity.Supported {
-					fmt.Fprintf(w, "pipeline audio activity: %s\n", processed.AudioActivity.Summary())
+				pipelineAttrs := []any{
+					"transcript", processed.Transcript,
+					"corrected", processed.Corrected,
+					"asr_duration", processed.ASRDuration.Round(time.Millisecond),
+					"correction_duration", processed.CorrectionDuration.Round(time.Millisecond),
+					"output_duration", processed.OutputDuration.Round(time.Millisecond),
+					"total_duration", processed.TotalDuration.Round(time.Millisecond),
 				}
+				if processed.AudioActivity.Supported {
+					pipelineAttrs = append(pipelineAttrs, "audio_activity", processed.AudioActivity.Summary())
+				}
+				logger.Info("pipeline result", pipelineAttrs...)
 				if processed.TranscriptWarning != "" {
-					fmt.Fprintf(w, "transcript warning: %s\n", processed.TranscriptWarning)
+					logger.Warn("transcript warning", "warning", processed.TranscriptWarning)
 				}
 				if processed.CorrectionWarning != "" {
-					fmt.Fprintf(w, "correction warning: %s\n", processed.CorrectionWarning)
+					logger.Warn("correction warning", "warning", processed.CorrectionWarning)
 				}
-				fmt.Fprintf(w, "output result: clipboard=%t(%s) paste=%t(%s)\n",
-					processed.Output.ClipboardWritten,
-					blankIfEmpty(processed.Output.ClipboardMethod, "none"),
-					processed.Output.PasteExecuted,
-					blankIfEmpty(processed.Output.PasteMethod, "none"),
+				logger.Info(
+					"output result",
+					"clipboard", processed.Output.ClipboardWritten,
+					"clipboard_method", blankIfEmpty(processed.Output.ClipboardMethod, "none"),
+					"paste", processed.Output.PasteExecuted,
+					"paste_method", blankIfEmpty(processed.Output.PasteMethod, "none"),
 				)
 				if processed.Output.PasteWarning != "" {
-					fmt.Fprintf(w, "paste warning: %s\n", processed.Output.PasteWarning)
+					logger.Warn("paste warning", "warning", processed.Output.PasteWarning)
 				}
-				a.emitNotification(w, a.notificationForProcessing(processed))
+				a.emitNotification(logger, a.notificationForProcessing(processed))
 			default:
-				fmt.Fprintf(w, "unknown trigger event: %s\n", event.Type)
+				logger.Warn("unknown trigger event", "type", event.Type)
 			}
 		}
 	}
