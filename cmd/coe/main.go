@@ -14,6 +14,13 @@ import (
 	"coe/internal/control"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+)
+
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -36,6 +43,9 @@ func run(parent context.Context, args []string) error {
 		return runServe(parent)
 	case "trigger":
 		return runTrigger(parent, args[1:])
+	case "version":
+		printVersion()
+		return nil
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -150,4 +160,12 @@ func printUsage() {
 	fmt.Println("  coe config init")
 	fmt.Println("  coe serve")
 	fmt.Println("  coe trigger <toggle|start|stop|status>")
+	fmt.Println("  coe version")
+}
+
+func printVersion() {
+	fmt.Printf("coe %s\n", version)
+	fmt.Printf("commit: %s\n", commit)
+	fmt.Printf("date: %s\n", date)
+	fmt.Printf("built_by: %s\n", builtBy)
 }

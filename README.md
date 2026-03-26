@@ -111,6 +111,15 @@ Then put your OpenAI key into `~/.config/coe/env` and restart the service:
 systemctl --user restart coe.service
 ```
 
+## Release
+
+GitHub Actions now builds Linux release artifacts with GoReleaser.
+
+- Pull requests and pushes to the default branch run a snapshot build and upload Linux artifacts to the workflow run.
+- Tags that match `v*` run `goreleaser release` and publish Linux binaries, tarballs, and checksums to the GitHub release.
+
+The release config lives in [`.goreleaser.yaml`](./.goreleaser.yaml). The workflow lives in [`.github/workflows/release.yml`](./.github/workflows/release.yml).
+
 ## Defaults
 
 ASR:
@@ -153,6 +162,7 @@ Notifications:
 - `go run ./cmd/coe trigger start`
 - `go run ./cmd/coe trigger stop`
 - `go run ./cmd/coe trigger status`
+- `go run ./cmd/coe version`
 
 ## Docs
 
