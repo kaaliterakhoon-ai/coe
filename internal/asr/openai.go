@@ -23,6 +23,7 @@ const (
 type OpenAIClient struct {
 	Endpoint   string
 	Model      string
+	APIKey     string
 	APIKeyEnv  string
 	Language   string
 	Prompt     string
@@ -76,13 +77,9 @@ func (c OpenAIClient) Transcribe(ctx context.Context, capture audio.Result) (Res
 }
 
 func (c OpenAIClient) transcribeOnce(ctx context.Context, wav []byte, language string) (openAITranscriptionPayload, error) {
-	keyEnv := c.APIKeyEnv
-	if keyEnv == "" {
-		keyEnv = "OPENAI_API_KEY"
-	}
-	apiKey := os.Getenv(keyEnv)
-	if apiKey == "" {
-		return openAITranscriptionPayload{}, fmt.Errorf("missing OpenAI API key in %s", keyEnv)
+	apiKey, _, err := resolveAPIKey(c.APIKey, c.APIKeyEnv)
+	if err != nil {
+		return openAITranscriptionPayload{}, err
 	}
 
 	var body bytes.Buffer
@@ -167,6 +164,24 @@ func (c OpenAIClient) transcribeOnce(ctx context.Context, wav []byte, language s
 	payload.Raw = strings.TrimSpace(string(data))
 	payload.LanguageHint = language
 	return payload, nil
+}
+
+func resolveAPIKey(explicit, envName string) (string, string, error) {
+	if strings.TrimSpace(explicit) != "" {
+		return strings.TrimSpace(explicit), "config", nil
+	}
+
+	keyEnv := strings.TrimSpace(envName)
+	if keyEnv == "" {
+		keyEnv = "OPENAI_API_KEY"
+	}
+
+	apiKey := strings.TrimSpace(os.Getenv(keyEnv))
+	if apiKey == "" {
+		return "", keyEnv, fmt.Errorf("missing OpenAI API key in %s", keyEnv)
+	}
+
+	return apiKey, keyEnv, nil
 }
 
 type openAITranscriptionPayload struct {

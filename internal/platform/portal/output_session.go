@@ -26,7 +26,9 @@ const (
 	keyStateReleased                  uint32 = 0
 	keyStatePressed                   uint32 = 1
 	leftCtrlKeysym                           = 0xffe3
+	leftShiftKeysym                          = 0xffe1
 	vKeysym                                  = 0x0076
+	insertKeysym                             = 0xff63
 	persistModeExplicitlyRevoked      uint32 = 2
 )
 
@@ -138,19 +140,14 @@ func (s *RemoteDesktopOutputSession) SetClipboard(ctx context.Context, text stri
 	return s.client.obj.CallWithContext(ctx, ClipboardSetSelectionMethod, 0, s.sessionHandle, options).Store()
 }
 
-func (s *RemoteDesktopOutputSession) SendPaste(ctx context.Context) error {
+func (s *RemoteDesktopOutputSession) SendPaste(ctx context.Context, shortcut string) error {
 	if !s.keyboardGranted {
 		return fmt.Errorf("portal keyboard access is not active")
 	}
 
-	events := []struct {
-		Keysym int32
-		State  uint32
-	}{
-		{Keysym: leftCtrlKeysym, State: keyStatePressed},
-		{Keysym: vKeysym, State: keyStatePressed},
-		{Keysym: vKeysym, State: keyStateReleased},
-		{Keysym: leftCtrlKeysym, State: keyStateReleased},
+	events, err := pasteShortcutEvents(shortcut)
+	if err != nil {
+		return err
 	}
 
 	for _, event := range events {
@@ -168,6 +165,41 @@ func (s *RemoteDesktopOutputSession) SendPaste(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type keyboardEvent struct {
+	Keysym int32
+	State  uint32
+}
+
+func pasteShortcutEvents(shortcut string) ([]keyboardEvent, error) {
+	switch strings.ToLower(strings.TrimSpace(shortcut)) {
+	case "", "ctrl+v":
+		return []keyboardEvent{
+			{Keysym: leftCtrlKeysym, State: keyStatePressed},
+			{Keysym: vKeysym, State: keyStatePressed},
+			{Keysym: vKeysym, State: keyStateReleased},
+			{Keysym: leftCtrlKeysym, State: keyStateReleased},
+		}, nil
+	case "ctrl+shift+v":
+		return []keyboardEvent{
+			{Keysym: leftCtrlKeysym, State: keyStatePressed},
+			{Keysym: leftShiftKeysym, State: keyStatePressed},
+			{Keysym: vKeysym, State: keyStatePressed},
+			{Keysym: vKeysym, State: keyStateReleased},
+			{Keysym: leftShiftKeysym, State: keyStateReleased},
+			{Keysym: leftCtrlKeysym, State: keyStateReleased},
+		}, nil
+	case "shift+insert":
+		return []keyboardEvent{
+			{Keysym: leftShiftKeysym, State: keyStatePressed},
+			{Keysym: insertKeysym, State: keyStatePressed},
+			{Keysym: insertKeysym, State: keyStateReleased},
+			{Keysym: leftShiftKeysym, State: keyStateReleased},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported paste shortcut %q", shortcut)
+	}
 }
 
 func (s *RemoteDesktopOutputSession) Close() error {

@@ -1,0 +1,145 @@
+# Runtime behavior.
+runtime:
+  # Target desktop profile. Today this project is GNOME-first.
+  target_desktop: gnome
+  # Log verbosity: debug, info, warn, error.
+  log_level: info
+
+# Hotkey metadata. This describes the intended shortcut, even when GNOME
+# currently falls back to a custom command instead of a true global shortcut.
+hotkey:
+  # Display name used when Coe ensures a GNOME custom shortcut entry.
+  name: coe-trigger
+  # Human-readable description of the trigger behavior.
+  description: Press and hold to start dictation.
+  # Preferred accelerator. On GNOME fallback, Coe will try to register this
+  # binding as a custom shortcut that runs `coe trigger toggle`.
+  preferred_accelerator: <Super>space
+
+# Local microphone capture settings.
+audio:
+  # Recorder binary used to capture raw PCM from PipeWire.
+  recorder_binary: pw-record
+  # Sample rate sent to the ASR pipeline.
+  sample_rate: 16000
+  # Channel count. The current pipeline expects mono audio.
+  channels: 1
+  # PCM sample format written by the recorder.
+  format: s16
+
+# Automatic speech recognition provider.
+asr:
+  # ASR provider name.
+  # Use `openai` for cloud ASR.
+  # Use `whispercpp` for local ASR through `whisper-cli`.
+  provider: openai
+  # Full HTTP endpoint for cloud transcription.
+  endpoint: https://api.openai.com/v1/audio/transcriptions
+  # ASR model name.
+  model: gpt-4o-mini-transcribe
+
+  # Language hint. Use `auto` or leave it empty to rely on auto-detection.
+  language: zh
+  # Optional prompt / initial prompt passed to the ASR backend.
+  prompt: ""
+  # Optional ASR API key stored directly in this config file.
+  api_key: ""
+  # Environment variable that stores the ASR API key when `api_key` is empty.
+  api_key_env: OPENAI_API_KEY
+  # Executable name or absolute path for the local CLI.
+  binary: whisper-cli
+  # Absolute path to the local Whisper model file.
+  model_path: ""
+  # Number of CPU threads for local inference. `0` means auto.
+  threads: 0
+  # Whether to allow GPU acceleration in the local CLI.
+  # `false` adds `--no-gpu`.
+  use_gpu: false
+
+# LLM cleanup / punctuation pass.
+llm:
+  # LLM provider name. Use `openai` for cleanup or `stub` to disable it.
+  provider: openai
+  # OpenAI-compatible API shape used for cleanup.
+  # `responses` calls the Responses API.
+  # `chat` calls the Chat Completions API through `uniai`.
+  endpoint_type: chat
+  # HTTP endpoint for the cleanup request.
+  # For `responses`, use the full responses endpoint.
+  # For `chat`, use either a `/v1` base URL or a full `/v1/chat/completions` URL.
+  endpoint: https://api.openai.com/v1
+  # Cleanup model name.
+  model: gpt-4o-mini
+  # Optional cleanup API key stored directly in this config file.
+  api_key: ""
+  # Environment variable that stores the cleanup API key when `api_key` is empty.
+  api_key_env: OPENAI_API_KEY
+  # Optional correction instructions.
+  prompt: ""
+
+# Clipboard and paste behavior.
+output:
+  # Preferred clipboard path. `portal` is the Wayland-native path on GNOME.
+  preferred_clipboard_mode: portal
+  # Try to paste automatically after writing the final text.
+  enable_auto_paste: true
+  # Default paste shortcut for regular GUI text fields.
+  paste_shortcut: ctrl+v
+  # Paste shortcut to use when the focused target looks like a terminal.
+  terminal_paste_shortcut: ctrl+shift+v
+  # Query a GNOME Shell extension over D-Bus to inspect the focused app.
+  # When enabled, Coe can switch to the terminal paste shortcut automatically.
+  use_gnome_focus_helper: true
+  # Persist portal authorization when the desktop backend supports it.
+  persist_portal_access: true
+  # Command-line clipboard fallback used when portal clipboard is unavailable.
+  clipboard_binary: wl-copy
+  # Command-line paste fallback. Empty means no command fallback.
+  paste_binary: ""
+
+# Desktop notification behavior.
+notifications:
+  # Send completion / failure notifications through org.freedesktop.Notifications.
+  enable_system: true
+  # Include part of the transcript in completion notifications.
+  show_text_preview: true
+  # Notify when recording starts. Usually too noisy, so default is false.
+  notify_on_recording_start: false
+
+# Example local ASR profile:
+#
+# asr:
+#   provider: whispercpp
+#   endpoint: ""
+#   model: ""
+#   language: zh
+#   prompt: ""
+#   api_key: ""
+#   api_key_env: ""
+#   binary: whisper-cli
+#   model_path: /absolute/path/to/ggml-base.bin
+#   threads: 4
+#   use_gpu: false
+#
+# Example focus-aware paste on GNOME:
+#
+# output:
+#   preferred_clipboard_mode: portal
+#   enable_auto_paste: true
+#   paste_shortcut: ctrl+v
+#   terminal_paste_shortcut: ctrl+shift+v
+#   use_gnome_focus_helper: true
+#   persist_portal_access: true
+#   clipboard_binary: wl-copy
+#   paste_binary: ""
+#
+# Example fast mode without LLM cleanup:
+#
+# llm:
+#   provider: stub
+#   endpoint_type: chat
+#   endpoint: ""
+#   model: ""
+#   api_key: ""
+#   api_key_env: ""
+#   prompt: ""

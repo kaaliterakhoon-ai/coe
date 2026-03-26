@@ -70,6 +70,7 @@ func TestOpenAIClientTranscribe(t *testing.T) {
 	client := OpenAIClient{
 		Endpoint:   server.URL,
 		Model:      "gpt-4o-mini-transcribe",
+		APIKey:     "test-key",
 		APIKeyEnv:  "OPENAI_API_KEY",
 		Language:   "zh",
 		HTTPClient: server.Client(),
@@ -143,6 +144,7 @@ func TestOpenAIClientTranscribeRetriesWithoutLanguageHintOnEmptyText(t *testing.
 	client := OpenAIClient{
 		Endpoint:   server.URL,
 		Model:      "gpt-4o-mini-transcribe",
+		APIKey:     "test-key",
 		APIKeyEnv:  "OPENAI_API_KEY",
 		Language:   "zh",
 		HTTPClient: server.Client(),
@@ -178,6 +180,7 @@ func TestOpenAIClientTranscribeReturnsWarningForEmptyText(t *testing.T) {
 	client := OpenAIClient{
 		Endpoint:   server.URL,
 		Model:      "gpt-4o-mini-transcribe",
+		APIKey:     "test-key",
 		APIKeyEnv:  "OPENAI_API_KEY",
 		Language:   "zh",
 		HTTPClient: server.Client(),
@@ -216,5 +219,38 @@ func TestOpenAIClientMissingAPIKey(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
 		t.Fatalf("expected missing key error, got %v", err)
+	}
+}
+
+func TestOpenAIClientPrefersExplicitAPIKey(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer direct-key" {
+			t.Fatalf("Authorization header = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"ok"}`))
+	}))
+	defer server.Close()
+
+	client := OpenAIClient{
+		Endpoint:   server.URL,
+		APIKey:     "direct-key",
+		HTTPClient: server.Client(),
+	}
+
+	result, err := client.Transcribe(context.Background(), audio.Result{
+		Data:       []byte{0x01, 0x02},
+		ByteCount:  2,
+		SampleRate: 16000,
+		Channels:   1,
+		Format:     "s16",
+	})
+	if err != nil {
+		t.Fatalf("Transcribe() error = %v", err)
+	}
+	if result.Text != "ok" {
+		t.Fatalf("result.Text = %q", result.Text)
 	}
 }

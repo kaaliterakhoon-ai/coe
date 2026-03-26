@@ -14,15 +14,15 @@ type Config struct {
 	Runtime       RuntimeConfig       `yaml:"runtime"`
 	Hotkey        HotkeyConfig        `yaml:"hotkey"`
 	Audio         AudioConfig         `yaml:"audio"`
-	ASR           Provider            `yaml:"asr"`
-	LLM           Provider            `yaml:"llm"`
+	ASR           ASRConfig           `yaml:"asr"`
+	LLM           LLMConfig           `yaml:"llm"`
 	Output        OutputConfig        `yaml:"output"`
 	Notifications NotificationsConfig `yaml:"notifications"`
 }
 
 type RuntimeConfig struct {
-	TargetDesktop        string `yaml:"target_desktop"`
-	AllowExternalTrigger bool   `yaml:"allow_external_trigger"`
+	TargetDesktop string `yaml:"target_desktop"`
+	LogLevel      string `yaml:"log_level"`
 }
 
 type HotkeyConfig struct {
@@ -38,18 +38,36 @@ type AudioConfig struct {
 	Format         string `yaml:"format"`
 }
 
-type Provider struct {
-	Kind      string `yaml:"kind"`
+type ASRConfig struct {
+	Provider  string `yaml:"provider"`
 	Endpoint  string `yaml:"endpoint"`
 	Model     string `yaml:"model"`
-	APIKeyEnv string `yaml:"api_key_env"`
 	Language  string `yaml:"language"`
 	Prompt    string `yaml:"prompt"`
+	APIKey    string `yaml:"api_key"`
+	APIKeyEnv string `yaml:"api_key_env"`
+	Binary    string `yaml:"binary"`
+	ModelPath string `yaml:"model_path"`
+	Threads   int    `yaml:"threads"`
+	UseGPU    bool   `yaml:"use_gpu"`
+}
+
+type LLMConfig struct {
+	Provider     string `yaml:"provider"`
+	Endpoint     string `yaml:"endpoint"`
+	EndpointType string `yaml:"endpoint_type"`
+	Model        string `yaml:"model"`
+	APIKey       string `yaml:"api_key"`
+	APIKeyEnv    string `yaml:"api_key_env"`
+	Prompt       string `yaml:"prompt"`
 }
 
 type OutputConfig struct {
 	PreferredClipboardMode string `yaml:"preferred_clipboard_mode"`
 	EnableAutoPaste        bool   `yaml:"enable_auto_paste"`
+	PasteShortcut          string `yaml:"paste_shortcut"`
+	TerminalPasteShortcut  string `yaml:"terminal_paste_shortcut"`
+	UseGNOMEFocusHelper    bool   `yaml:"use_gnome_focus_helper"`
 	PersistPortalAccess    bool   `yaml:"persist_portal_access"`
 	ClipboardBinary        string `yaml:"clipboard_binary"`
 	PasteBinary            string `yaml:"paste_binary"`
@@ -64,13 +82,13 @@ type NotificationsConfig struct {
 func Default() Config {
 	return Config{
 		Runtime: RuntimeConfig{
-			TargetDesktop:        "gnome",
-			AllowExternalTrigger: true,
+			TargetDesktop: "gnome",
+			LogLevel:      "info",
 		},
 		Hotkey: HotkeyConfig{
-			Name:                 "push-to-talk",
+			Name:                 "coe-trigger",
 			Description:          "Press and hold to start dictation.",
-			PreferredAccelerator: "<Ctrl><Alt>space",
+			PreferredAccelerator: "<Super>space",
 		},
 		Audio: AudioConfig{
 			RecorderBinary: "pw-record",
@@ -78,24 +96,33 @@ func Default() Config {
 			Channels:       1,
 			Format:         "s16",
 		},
-		ASR: Provider{
-			Kind:      "openai",
+		ASR: ASRConfig{
+			Provider:  "openai",
 			Endpoint:  "https://api.openai.com/v1/audio/transcriptions",
 			Model:     "gpt-4o-mini-transcribe",
-			APIKeyEnv: "OPENAI_API_KEY",
 			Language:  "zh",
 			Prompt:    "",
-		},
-		LLM: Provider{
-			Kind:      "openai",
-			Endpoint:  "https://api.openai.com/v1/responses",
-			Model:     "gpt-4o-mini",
+			APIKey:    "",
 			APIKeyEnv: "OPENAI_API_KEY",
-			Prompt:    "",
+			Binary:    "whisper-cli",
+			ModelPath: "",
+			Threads:   0,
+			UseGPU:    false,
+		},
+		LLM: LLMConfig{
+			Provider:     "openai",
+			Endpoint:     "https://api.openai.com/v1",
+			EndpointType: "chat",
+			Model:        "gpt-4o-mini",
+			APIKeyEnv:    "OPENAI_API_KEY",
+			Prompt:       "",
 		},
 		Output: OutputConfig{
 			PreferredClipboardMode: "portal",
 			EnableAutoPaste:        true,
+			PasteShortcut:          "ctrl+v",
+			TerminalPasteShortcut:  "ctrl+shift+v",
+			UseGNOMEFocusHelper:    true,
 			PersistPortalAccess:    true,
 			ClipboardBinary:        "wl-copy",
 			PasteBinary:            "",

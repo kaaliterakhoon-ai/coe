@@ -32,4 +32,16 @@ func TestWriteDefaultAndLoad(t *testing.T) {
 	if !cfg.Notifications.EnableSystem {
 		t.Fatal("expected system notifications to be enabled by default")
 	}
+	if cfg.Runtime.LogLevel != "info" {
+		t.Fatalf("unexpected log level %q", cfg.Runtime.LogLevel)
+	}
+	if cfg.Output.PasteShortcut != "ctrl+v" {
+		t.Fatalf("unexpected paste shortcut %q", cfg.Output.PasteShortcut)
+	}
+	if cfg.Output.TerminalPasteShortcut != "ctrl+shift+v" {
+		t.Fatalf("unexpected terminal paste shortcut %q", cfg.Output.TerminalPasteShortcut)
+	}
+	if !cfg.Output.UseGNOMEFocusHelper {
+		t.Fatal("expected GNOME focus helper to be enabled by default")
+	}
 }

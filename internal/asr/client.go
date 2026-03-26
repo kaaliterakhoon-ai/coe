@@ -19,20 +19,30 @@ type Client interface {
 	Name() string
 }
 
-func NewClient(provider config.Provider) (Client, error) {
-	switch strings.ToLower(provider.Kind) {
+func NewClient(provider config.ASRConfig) (Client, error) {
+	switch strings.ToLower(provider.Provider) {
 	case "", "stub":
 		return StubClient{}, nil
 	case "openai":
 		return OpenAIClient{
 			Endpoint:  provider.Endpoint,
 			Model:     provider.Model,
+			APIKey:    provider.APIKey,
 			APIKeyEnv: provider.APIKeyEnv,
 			Language:  provider.Language,
 			Prompt:    provider.Prompt,
 		}, nil
+	case "whispercpp", "whisper.cpp":
+		return WhisperCPPCLIClient{
+			Binary:    provider.Binary,
+			ModelPath: provider.ModelPath,
+			Language:  provider.Language,
+			Prompt:    provider.Prompt,
+			Threads:   provider.Threads,
+			UseGPU:    provider.UseGPU,
+		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported ASR provider kind %q", provider.Kind)
+		return nil, fmt.Errorf("unsupported ASR provider %q", provider.Provider)
 	}
 }
 

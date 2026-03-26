@@ -17,19 +17,21 @@ type Corrector interface {
 	Name() string
 }
 
-func NewCorrector(provider config.Provider) (Corrector, error) {
-	switch strings.ToLower(provider.Kind) {
+func NewCorrector(provider config.LLMConfig) (Corrector, error) {
+	switch strings.ToLower(provider.Provider) {
 	case "", "stub":
 		return StubCorrector{}, nil
 	case "openai":
 		return OpenAICorrector{
-			Endpoint:  provider.Endpoint,
-			Model:     provider.Model,
-			APIKeyEnv: provider.APIKeyEnv,
-			Prompt:    provider.Prompt,
+			Endpoint:     provider.Endpoint,
+			EndpointType: provider.EndpointType,
+			Model:        provider.Model,
+			APIKey:       provider.APIKey,
+			APIKeyEnv:    provider.APIKeyEnv,
+			Prompt:       provider.Prompt,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported LLM provider kind %q", provider.Kind)
+		return nil, fmt.Errorf("unsupported LLM provider %q", provider.Provider)
 	}
 }
 

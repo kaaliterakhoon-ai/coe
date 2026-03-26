@@ -30,7 +30,7 @@ The verified path today is:
 
 The runtime flow is:
 
-1. Trigger dictation with `coe trigger toggle`, usually from a GNOME custom shortcut.
+1. Trigger dictation with `coe trigger toggle`, usually from a GNOME custom shortcut that Coe ensures at startup when `GlobalShortcuts` is unavailable.
 2. Record microphone input with `pw-record`.
 3. Reject near-silent or obviously corrupt captures before they leave the machine.
 4. Send the audio to OpenAI Audio Transcriptions.
@@ -41,7 +41,8 @@ The runtime flow is:
 Current provider support is intentionally narrow:
 
 - ASR: OpenAI Audio Transcriptions
-- LLM correction: OpenAI-compatible Responses API
+- ASR: optional local `whisper.cpp` provider through `whisper-cli`
+- LLM correction: OpenAI-compatible Responses API or Chat Completions through `uniai`
 - Output: portal clipboard and portal paste first, `wl-copy` and `ydotool` as fallbacks
 
 ## Installation
@@ -56,9 +57,12 @@ Runtime requirements:
 - `wl-copy`
 - `OPENAI_API_KEY`
 
+You can keep the key in `~/.config/coe/env`, or write it directly into `asr.api_key` and `llm.api_key` in `config.yaml`.
+
 Optional:
 
 - `ydotool` if you want to try the command-line paste fallback
+- `whisper-cli` and a Whisper model file if you want local ASR
 
 On Ubuntu, you can install the command-line dependencies with:
 
@@ -117,12 +121,15 @@ The script installs:
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
 - `~/.config/coe/env`
+- `~/.local/share/gnome-shell/extensions/coe-focus-helper@quaily.com`
 
 Then put your OpenAI key into `~/.config/coe/env` and restart the service:
 
 ```bash
 systemctl --user restart coe.service
 ```
+
+If you prefer, you can leave `~/.config/coe/env` empty and store the key in `asr.api_key` and `llm.api_key` instead.
 
 ## Configuration
 
@@ -131,6 +138,7 @@ Coe keeps its config in plain files.
 Config file:
 
 - `~/.config/coe/config.yaml`
+- repo example: [`config.example.yaml`](./config.example.yaml)
 
 Runtime state:
 
@@ -147,19 +155,56 @@ go run ./cmd/coe config init
 
 That writes `~/.config/coe/config.yaml`, unless `COE_CONFIG` overrides the path.
 
+Or start from the repo example:
+
+```bash
+cp config.example.yaml ~/.config/coe/config.yaml
+```
+
 The current defaults are:
 
 ### ASR
 
+- provider: `openai`
 - endpoint: `https://api.openai.com/v1/audio/transcriptions`
 - model: `gpt-4o-mini-transcribe`
+- direct key field: `asr.api_key`
 - api key env: `OPENAI_API_KEY`
+
+To switch ASR to local `whisper.cpp`, set:
+
+```yaml
+asr:
+  provider: whispercpp
+  endpoint: ""
+  model: ""
+  language: zh
+  api_key: ""
+  api_key_env: ""
+  binary: whisper-cli
+  model_path: /absolute/path/to/ggml-base.bin
+  threads: 4
+  use_gpu: false
+```
+
+Notes:
+
+- `binary` defaults to `whisper-cli`
+- `model_path` is required for `whisper.cpp`
+- `prompt` is passed as the initial prompt
+- `threads` defaults to `GOMAXPROCS`
+- `use_gpu: false` adds `--no-gpu`
 
 ### LLM correction
 
-- endpoint: `https://api.openai.com/v1/responses`
+- provider: `openai`
+- endpoint type: `chat`
+- endpoint: `https://api.openai.com/v1`
 - model: `gpt-4o-mini`
+- direct key field: `llm.api_key`
 - api key env: `OPENAI_API_KEY`
+
+Set `llm.endpoint_type: responses` if you want Coe to call the OpenAI Responses API instead. The default route is Chat Completions through `uniai`.
 
 ### Audio
 
@@ -173,6 +218,7 @@ The current defaults are:
 - clipboard: `wl-copy`
 - clipboard and paste prefer portal paths when the runtime exposes them
 - `wl-copy` and `ydotool` remain command-line fallbacks
+- GNOME focus-aware paste is enabled by default in new configs and can switch from `Ctrl+V` to `Ctrl+Shift+V` for terminal-like targets
 
 ### Notifications
 
@@ -180,11 +226,19 @@ The current defaults are:
 - `show_text_preview: true`
 - `notify_on_recording_start: false`
 
+### Runtime
+
+- `log_level: info`
+- set `log_level: debug` to print per-stage timings and output fallback details
+- or override it for one run: `coe serve --log-level debug`
+
+See [`config.example.yaml`](./config.example.yaml) and [`docs/gnome-focus-helper.md`](./docs/gnome-focus-helper.md) for the GNOME focus-aware paste route. Existing configs may need `output.use_gnome_focus_helper: true` added manually.
+
 ## Current Behavior
 
 What works:
 
-- GNOME Wayland fallback trigger via `coe trigger toggle`
+- GNOME Wayland fallback trigger via an auto-managed GNOME custom shortcut that runs `coe trigger toggle`
 - microphone capture through `pw-record`
 - batch transcription through OpenAI Audio Transcriptions
 - transcript cleanup through OpenAI Responses

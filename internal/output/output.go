@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -9,13 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"coe/internal/focus"
 	"coe/internal/platform/portal"
 	"coe/internal/state"
 )
 
 type PortalSession interface {
 	SetClipboard(context.Context, string) error
-	SendPaste(context.Context) error
+	SendPaste(context.Context, string) error
 	Close() error
 	RestoreToken() string
 }
@@ -30,30 +32,44 @@ type PortalRequest struct {
 }
 
 type Coordinator struct {
-	ClipboardPlan       string
-	PastePlan           string
-	ClipboardBinary     string
-	PasteBinary         string
-	EnableAutoPaste     bool
-	UsePortalClipboard  bool
-	UsePortalPaste      bool
-	PersistPortalAccess bool
-	PortalFactory       PortalFactory
-	PortalStateStore    *state.Store
+	ClipboardPlan         string
+	PastePlan             string
+	ClipboardBinary       string
+	PasteBinary           string
+	EnableAutoPaste       bool
+	PasteShortcut         string
+	TerminalPasteShortcut string
+	UsePortalClipboard    bool
+	UsePortalPaste        bool
+	PersistPortalAccess   bool
+	FocusProvider         focus.Provider
+	PortalFactory         PortalFactory
+	PortalStateStore      *state.Store
 
 	portalMu sync.Mutex
 	portal   PortalSession
 }
 
 type Delivery struct {
-	ClipboardWritten bool
-	ClipboardMethod  string
-	PasteExecuted    bool
-	PasteMethod      string
-	PasteWarning     string
+	ClipboardWritten  bool
+	ClipboardMethod   string
+	ClipboardWarning  string
+	ClipboardDuration time.Duration
+	PasteExecuted     bool
+	PasteMethod       string
+	PasteShortcut     string
+	PasteTarget       string
+	PasteWarning      string
+	PasteDuration     time.Duration
 }
 
 const portalPasteDelay = 150 * time.Millisecond
+
+const (
+	portalOperationTimeout  = 5 * time.Second
+	clipboardCommandTimeout = 2 * time.Second
+	pasteCommandTimeout     = 2 * time.Second
+)
 
 func (c *Coordinator) Summary() string {
 	if c == nil {
@@ -97,12 +113,17 @@ func (c *Coordinator) Close() error {
 }
 
 func (c *Coordinator) writeClipboard(ctx context.Context, text string, result *Delivery) error {
+	startedAt := time.Now()
+	defer func() {
+		result.ClipboardDuration = time.Since(startedAt)
+	}()
+
 	var portalErr error
 	if c.UsePortalClipboard {
 		session, err := c.ensurePortal(ctx)
 		if err != nil {
 			portalErr = fmt.Errorf("portal clipboard session failed: %w", err)
-		} else if err := session.SetClipboard(ctx, text); err != nil {
+		} else if err := c.setPortalClipboard(ctx, session, text); err != nil {
 			portalErr = fmt.Errorf("portal clipboard write failed: %w", err)
 		} else {
 			result.ClipboardWritten = true
@@ -112,7 +133,10 @@ func (c *Coordinator) writeClipboard(ctx context.Context, text string, result *D
 	}
 
 	if c.ClipboardBinary != "" {
-		cmd := exec.CommandContext(ctx, c.ClipboardBinary)
+		commandCtx, cancel := context.WithTimeout(ctx, clipboardCommandTimeout)
+		defer cancel()
+
+		cmd := exec.CommandContext(commandCtx, c.ClipboardBinary)
 		cmd.Stdin = strings.NewReader(text)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("clipboard command failed: %w (%s)", err, strings.TrimSpace(string(output)))
@@ -120,19 +144,32 @@ func (c *Coordinator) writeClipboard(ctx context.Context, text string, result *D
 
 		result.ClipboardWritten = true
 		result.ClipboardMethod = filepath.Base(c.ClipboardBinary)
+		if portalErr != nil {
+			result.ClipboardWarning = portalErr.Error()
+		}
 		return nil
 	}
 
 	if portalErr != nil {
+		result.ClipboardWarning = portalErr.Error()
 		return portalErr
 	}
 	return fmt.Errorf("clipboard output is not configured")
 }
 
 func (c *Coordinator) autoPaste(ctx context.Context, result *Delivery) error {
+	startedAt := time.Now()
+	defer func() {
+		result.PasteDuration = time.Since(startedAt)
+	}()
+
 	if !c.EnableAutoPaste {
 		return nil
 	}
+
+	shortcut, target := c.resolvePasteShortcut(ctx)
+	result.PasteShortcut = shortcut
+	result.PasteTarget = target
 
 	var portalErr error
 	if c.UsePortalPaste {
@@ -146,7 +183,7 @@ func (c *Coordinator) autoPaste(ctx context.Context, result *Delivery) error {
 		}
 
 		if portalErr == nil && session != nil {
-			if err := session.SendPaste(ctx); err != nil {
+			if err := c.sendPortalPaste(ctx, session, shortcut); err != nil {
 				portalErr = fmt.Errorf("portal paste failed: %w", err)
 			} else {
 				result.PasteExecuted = true
@@ -165,7 +202,16 @@ func (c *Coordinator) autoPaste(ctx context.Context, result *Delivery) error {
 
 	switch filepath.Base(c.PasteBinary) {
 	case "ydotool":
-		cmd := exec.CommandContext(ctx, c.PasteBinary, "key", "29:1", "47:1", "47:0", "29:0")
+		args, err := ydotoolPasteArgs(shortcut)
+		if err != nil {
+			result.PasteWarning = err.Error()
+			return nil
+		}
+
+		commandCtx, cancel := context.WithTimeout(ctx, pasteCommandTimeout)
+		defer cancel()
+
+		cmd := exec.CommandContext(commandCtx, c.PasteBinary, args...)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			result.PasteWarning = fmt.Sprintf("ydotool paste failed: %v (%s)", err, strings.TrimSpace(string(output)))
 			return nil
@@ -191,6 +237,26 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+func (c *Coordinator) resolvePasteShortcut(ctx context.Context) (string, string) {
+	baseShortcut := NormalizePasteShortcut(c.PasteShortcut)
+	terminalShortcut := NormalizePasteShortcut(c.TerminalPasteShortcut)
+	if terminalShortcut == "" {
+		terminalShortcut = "ctrl+shift+v"
+	}
+	if c.FocusProvider == nil {
+		return baseShortcut, ""
+	}
+
+	target, err := c.FocusProvider.Focused(ctx)
+	if err != nil {
+		return baseShortcut, ""
+	}
+	if looksLikeTerminalTarget(target) {
+		return terminalShortcut, target.Summary()
+	}
+	return baseShortcut, target.Summary()
 }
 
 func (c *Coordinator) ensurePortal(ctx context.Context) (PortalSession, error) {
@@ -219,6 +285,65 @@ func (c *Coordinator) ensurePortal(ctx context.Context) (PortalSession, error) {
 	c.saveRestoreToken(session.RestoreToken())
 	c.portal = session
 	return c.portal, nil
+}
+
+func (c *Coordinator) setPortalClipboard(ctx context.Context, session PortalSession, text string) error {
+	callCtx, cancel := context.WithTimeout(ctx, portalOperationTimeout)
+	defer cancel()
+
+	err := session.SetClipboard(callCtx, text)
+	if err == nil || !isInvalidPortalSessionError(err) {
+		return err
+	}
+
+	retried, retryErr := c.resetPortalAndRetry(ctx)
+	if retryErr != nil {
+		return errors.Join(err, retryErr)
+	}
+
+	callCtx, cancel = context.WithTimeout(ctx, portalOperationTimeout)
+	defer cancel()
+	if retryErr = retried.SetClipboard(callCtx, text); retryErr != nil {
+		return errors.Join(err, retryErr)
+	}
+	return nil
+}
+
+func (c *Coordinator) sendPortalPaste(ctx context.Context, session PortalSession, shortcut string) error {
+	callCtx, cancel := context.WithTimeout(ctx, portalOperationTimeout)
+	defer cancel()
+
+	err := session.SendPaste(callCtx, shortcut)
+	if err == nil || !isInvalidPortalSessionError(err) {
+		return err
+	}
+
+	retried, retryErr := c.resetPortalAndRetry(ctx)
+	if retryErr != nil {
+		return errors.Join(err, retryErr)
+	}
+
+	callCtx, cancel = context.WithTimeout(ctx, portalOperationTimeout)
+	defer cancel()
+	if retryErr = retried.SendPaste(callCtx, shortcut); retryErr != nil {
+		return errors.Join(err, retryErr)
+	}
+	return nil
+}
+
+func (c *Coordinator) resetPortalAndRetry(ctx context.Context) (PortalSession, error) {
+	c.portalMu.Lock()
+	if c.portal != nil {
+		_ = c.portal.Close()
+		c.portal = nil
+	}
+	c.portalMu.Unlock()
+
+	return c.ensurePortal(ctx)
+}
+
+func isInvalidPortalSessionError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "invalid session")
 }
 
 func defaultPortalFactory(ctx context.Context, request PortalRequest) (PortalSession, error) {

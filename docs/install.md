@@ -9,7 +9,8 @@ The current install target is:
 - one user-scoped binary in `~/.local/bin/coe`
 - one `systemd --user` service
 - one env file for secrets
-- one GNOME custom shortcut that triggers the daemon
+- one GNOME Shell extension for focus-aware paste
+- one GNOME custom shortcut that Coe ensures at startup when `GlobalShortcuts` is unavailable
 
 ## Quick install
 
@@ -24,7 +25,8 @@ This does four things:
 1. builds `./cmd/coe`
 2. installs the binary to `~/.local/bin/coe`
 3. installs `packaging/systemd/coe.service` into `~/.config/systemd/user/`
-4. enables and starts the user service
+4. installs the GNOME focus helper extension into `~/.local/share/gnome-shell/extensions/`
+5. enables and starts the user service
 
 ## Required secret
 
@@ -44,6 +46,8 @@ Then restart the service:
 systemctl --user restart coe.service
 ```
 
+If you prefer, you can keep `~/.config/coe/env` empty and store the key directly in `asr.api_key` and `llm.api_key` inside `~/.config/coe/config.yaml`.
+
 ## Default config and state
 
 Config file:
@@ -62,15 +66,33 @@ Desktop notifications:
 - successful dictation and failure cases are reported through `org.freedesktop.Notifications`
 - recording-start notifications are disabled by default
 
+Runtime logging:
+
+- set `runtime.log_level: debug` in `~/.config/coe/config.yaml` to print per-stage timings and output fallback details
+- or override it for one run with `coe serve --log-level debug`
+
 ## GNOME shortcut
 
-Add a GNOME custom shortcut that runs:
+On GNOME systems that do not expose `GlobalShortcuts`, Coe now tries to ensure a GNOME custom shortcut at startup. It uses:
 
-```bash
-~/.local/bin/coe trigger toggle
+- the executable path for `coe trigger toggle`
+- `hotkey.name` as the displayed shortcut name
+- `hotkey.preferred_accelerator` as the binding
+
+If startup cannot write GNOME shortcut settings, Coe logs a startup warning and you can still add the shortcut manually.
+
+## GNOME focus helper
+
+The install script also copies the Coe GNOME Shell extension to:
+
+- `~/.local/share/gnome-shell/extensions/coe-focus-helper@quaily.com`
+
+If `gnome-extensions` is available, the script will try to enable it. New configs enable focus-aware paste by default. If you already had a config file before this change, make sure it contains:
+
+```yaml
+output:
+  use_gnome_focus_helper: true
 ```
-
-This is the current fallback trigger path on GNOME systems that do not expose `GlobalShortcuts`.
 
 ## Useful commands
 
@@ -108,3 +130,4 @@ systemctl --user disable --now coe.service
 
 - The user service imports common graphical session environment variables during installation, but on some desktops you may still need a re-login before all variables are visible to `systemd --user`.
 - The first successful portal authorization may still prompt once. Later runs should reuse the saved restore token when GNOME accepts restoration.
+- GNOME custom shortcut fallback is idempotent. Repeated starts update the same shortcut instead of appending duplicates.

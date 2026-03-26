@@ -13,11 +13,13 @@ import (
 	"coe/internal/capabilities"
 	"coe/internal/config"
 	"coe/internal/control"
+	"coe/internal/focus"
 	"coe/internal/hotkey"
 	"coe/internal/llm"
 	"coe/internal/notify"
 	"coe/internal/output"
 	"coe/internal/pipeline"
+	"coe/internal/platform/gnome"
 	"coe/internal/state"
 )
 
@@ -30,6 +32,7 @@ type App struct {
 	Notifier          notify.Service
 	StartupWarnings   []string
 	Pipeline          pipeline.Orchestrator
+	resourceClosers   []io.Closer
 }
 
 func New(ctx context.Context, cfg config.Config) (*App, error) {
@@ -50,6 +53,16 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	corrector, err := llm.NewCorrector(cfg.LLM)
 	if err != nil {
+		return nil, err
+	}
+	resourceClosers := make([]io.Closer, 0, 1)
+	if closer, ok := asrClient.(io.Closer); ok {
+		resourceClosers = append(resourceClosers, closer)
+	}
+	if err := output.ValidatePasteShortcut(cfg.Output.PasteShortcut); err != nil {
+		return nil, err
+	}
+	if err := output.ValidatePasteShortcut(cfg.Output.TerminalPasteShortcut); err != nil {
 		return nil, err
 	}
 	clipboardBinary := cfg.Output.ClipboardBinary
@@ -76,8 +89,9 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	service := hotkey.Service(hotkey.PlannedService{Description: description})
 	var external *hotkey.ExternalTriggerService
 	var controlSocketPath string
+	startupWarnings := make([]string, 0, 2)
 
-	if caps.Hotkey.Mode == capabilities.ModeExternalBinding && cfg.Runtime.AllowExternalTrigger {
+	if caps.Hotkey.Mode == capabilities.ModeExternalBinding {
 		external = hotkey.NewExternalTriggerService(description)
 		service = external
 
@@ -86,16 +100,33 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			return nil, err
 		}
 		controlSocketPath = socketPath
+
+		if cfg.Runtime.TargetDesktop == "gnome" {
+			manager := gnome.NewShortcutManager()
+			if err := manager.EnsureTriggerShortcut(ctx, cfg.Hotkey.Name, cfg.Hotkey.PreferredAccelerator); err != nil {
+				startupWarnings = append(startupWarnings, fmt.Sprintf("GNOME custom shortcut setup failed: %v", err))
+			}
+		}
 	}
 
 	notificationService := notify.Service(notify.Disabled{})
-	startupWarnings := make([]string, 0, 1)
 	if cfg.Notifications.EnableSystem {
 		service, err := notify.ConnectSession("coe")
 		if err != nil {
 			startupWarnings = append(startupWarnings, fmt.Sprintf("system notifications unavailable: %v", err))
 		} else {
 			notificationService = service
+		}
+	}
+
+	focusProvider := focus.Provider(focus.Disabled{})
+	if cfg.Output.UseGNOMEFocusHelper && cfg.Runtime.TargetDesktop == "gnome" {
+		provider, err := focus.ConnectGNOMESession()
+		if err != nil {
+			startupWarnings = append(startupWarnings, fmt.Sprintf("GNOME focus helper unavailable: %v", err))
+		} else {
+			focusProvider = provider
+			resourceClosers = append(resourceClosers, provider)
 		}
 	}
 
@@ -107,20 +138,24 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		ControlSocketPath: controlSocketPath,
 		Notifier:          notificationService,
 		StartupWarnings:   startupWarnings,
+		resourceClosers:   resourceClosers,
 		Pipeline: pipeline.Orchestrator{
 			Recorder:  recorder,
 			ASR:       asrClient,
 			Corrector: corrector,
 			Output: &output.Coordinator{
-				ClipboardPlan:       describeFeature(string(caps.Clipboard.Mode), caps.Clipboard.Detail),
-				PastePlan:           describeFeature(string(caps.Paste.Mode), caps.Paste.Detail),
-				ClipboardBinary:     clipboardBinary,
-				PasteBinary:         pasteBinary,
-				EnableAutoPaste:     cfg.Output.EnableAutoPaste,
-				UsePortalClipboard:  caps.Clipboard.Mode == capabilities.ModePortal,
-				UsePortalPaste:      caps.Paste.Mode == capabilities.ModePortal,
-				PersistPortalAccess: cfg.Output.PersistPortalAccess && caps.Portals.RemoteDesktop.Version >= 2,
-				PortalStateStore:    portalStateStore,
+				ClipboardPlan:         describeFeature(string(caps.Clipboard.Mode), caps.Clipboard.Detail),
+				PastePlan:             describeFeature(string(caps.Paste.Mode), caps.Paste.Detail),
+				ClipboardBinary:       clipboardBinary,
+				PasteBinary:           pasteBinary,
+				EnableAutoPaste:       cfg.Output.EnableAutoPaste,
+				PasteShortcut:         cfg.Output.PasteShortcut,
+				TerminalPasteShortcut: cfg.Output.TerminalPasteShortcut,
+				UsePortalClipboard:    caps.Clipboard.Mode == capabilities.ModePortal,
+				UsePortalPaste:        caps.Paste.Mode == capabilities.ModePortal,
+				PersistPortalAccess:   cfg.Output.PersistPortalAccess && caps.Portals.RemoteDesktop.Version >= 2,
+				FocusProvider:         focusProvider,
+				PortalStateStore:      portalStateStore,
 			},
 		},
 	}
@@ -130,6 +165,9 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 
 func (a *App) Serve(ctx context.Context, w io.Writer) error {
 	defer func() {
+		for _, closer := range a.resourceClosers {
+			_ = closer.Close()
+		}
 		if a.Notifier != nil {
 			_ = a.Notifier.Close()
 		}
@@ -138,7 +176,9 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 		}
 	}()
 
-	logger := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{}))
+	logger := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
+		Level: parseLogLevel(a.Config.Runtime.LogLevel),
+	}))
 
 	logger.Info("coe starting")
 	logger.Info("runtime capabilities", "report", strings.TrimSpace(a.Caps.Report()))
@@ -146,6 +186,9 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 		"hotkey", a.Hotkey.Plan(),
 		"pipeline", a.Pipeline.Summary(),
 		"notifications", blankIfEmpty(a.Notifier.Summary(), "disabled"),
+		"paste_shortcut", output.NormalizePasteShortcut(a.Config.Output.PasteShortcut),
+		"terminal_paste_shortcut", output.NormalizePasteShortcut(a.Config.Output.TerminalPasteShortcut),
+		"gnome_focus_helper", a.Config.Output.UseGNOMEFocusHelper,
 	}
 	if a.ControlSocketPath != "" {
 		wiringAttrs = append(wiringAttrs, "control_socket", a.ControlSocketPath)
@@ -253,6 +296,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 					recordingAttrs = append(recordingAttrs, "stderr", result.Stderr)
 				}
 				logger.Info("recording stopped", recordingAttrs...)
+				logger.Debug("capture processing started", "bytes", result.ByteCount)
 
 				processed, err := a.Pipeline.ProcessCapture(ctx, result)
 				if err != nil {
@@ -273,6 +317,40 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 					pipelineAttrs = append(pipelineAttrs, "audio_activity", processed.AudioActivity.Summary())
 				}
 				logger.Info("pipeline result", pipelineAttrs...)
+				logger.Debug(
+					"asr stage completed",
+					"duration", processed.ASRDuration.Round(time.Millisecond),
+					"transcript_chars", len([]rune(processed.Transcript)),
+					"warning", blankIfEmpty(processed.TranscriptWarning, "none"),
+				)
+				logger.Debug(
+					"correction stage completed",
+					"duration", processed.CorrectionDuration.Round(time.Millisecond),
+					"corrected_chars", len([]rune(processed.Corrected)),
+					"changed", processed.Corrected != "" && processed.Corrected != processed.Transcript,
+					"warning", blankIfEmpty(processed.CorrectionWarning, "none"),
+				)
+				logger.Debug(
+					"output stage completed",
+					"duration", processed.OutputDuration.Round(time.Millisecond),
+					"clipboard", processed.Output.ClipboardWritten,
+					"clipboard_method", blankIfEmpty(processed.Output.ClipboardMethod, "none"),
+					"clipboard_duration", processed.Output.ClipboardDuration.Round(time.Millisecond),
+					"clipboard_warning", blankIfEmpty(processed.Output.ClipboardWarning, "none"),
+					"paste", processed.Output.PasteExecuted,
+					"paste_method", blankIfEmpty(processed.Output.PasteMethod, "none"),
+					"paste_shortcut", blankIfEmpty(processed.Output.PasteShortcut, "none"),
+					"paste_target", blankIfEmpty(processed.Output.PasteTarget, "unknown"),
+					"paste_duration", processed.Output.PasteDuration.Round(time.Millisecond),
+					"paste_warning", blankIfEmpty(processed.Output.PasteWarning, "none"),
+				)
+				logger.Debug(
+					"pipeline stage timings",
+					"asr_duration", processed.ASRDuration.Round(time.Millisecond),
+					"correction_duration", processed.CorrectionDuration.Round(time.Millisecond),
+					"output_duration", processed.OutputDuration.Round(time.Millisecond),
+					"total_duration", processed.TotalDuration.Round(time.Millisecond),
+				)
 				if processed.TranscriptWarning != "" {
 					logger.Warn("transcript warning", "warning", processed.TranscriptWarning)
 				}
@@ -283,8 +361,23 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 					"output result",
 					"clipboard", processed.Output.ClipboardWritten,
 					"clipboard_method", blankIfEmpty(processed.Output.ClipboardMethod, "none"),
+					"clipboard_duration", processed.Output.ClipboardDuration.Round(time.Millisecond),
 					"paste", processed.Output.PasteExecuted,
 					"paste_method", blankIfEmpty(processed.Output.PasteMethod, "none"),
+					"paste_shortcut", blankIfEmpty(processed.Output.PasteShortcut, "none"),
+					"paste_target", blankIfEmpty(processed.Output.PasteTarget, "unknown"),
+					"paste_duration", processed.Output.PasteDuration.Round(time.Millisecond),
+				)
+				logger.Debug(
+					"output delivery details",
+					"clipboard_method", blankIfEmpty(processed.Output.ClipboardMethod, "none"),
+					"clipboard_duration", processed.Output.ClipboardDuration.Round(time.Millisecond),
+					"clipboard_warning", blankIfEmpty(processed.Output.ClipboardWarning, "none"),
+					"paste_method", blankIfEmpty(processed.Output.PasteMethod, "none"),
+					"paste_shortcut", blankIfEmpty(processed.Output.PasteShortcut, "none"),
+					"paste_target", blankIfEmpty(processed.Output.PasteTarget, "unknown"),
+					"paste_duration", processed.Output.PasteDuration.Round(time.Millisecond),
+					"paste_warning", blankIfEmpty(processed.Output.PasteWarning, "none"),
 				)
 				if processed.Output.PasteWarning != "" {
 					logger.Warn("paste warning", "warning", processed.Output.PasteWarning)
@@ -294,6 +387,19 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				logger.Warn("unknown trigger event", "type", event.Type)
 			}
 		}
+	}
+}
+
+func parseLogLevel(value string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }
 

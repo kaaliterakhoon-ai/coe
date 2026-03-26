@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"coe/internal/focus"
 	"coe/internal/state"
 )
 
@@ -77,6 +78,9 @@ func TestDeliverRunsYdotoolPaste(t *testing.T) {
 	}
 	if !delivery.PasteExecuted {
 		t.Fatal("expected paste to be executed")
+	}
+	if delivery.PasteShortcut != "ctrl+v" {
+		t.Fatalf("paste shortcut = %q, want %q", delivery.PasteShortcut, "ctrl+v")
 	}
 
 	data, err := os.ReadFile(pasteSink)
@@ -180,6 +184,9 @@ func TestDeliverPrefersPortalPaste(t *testing.T) {
 	if portal.pasteCalls != 1 {
 		t.Fatalf("portal paste calls = %d, want 1", portal.pasteCalls)
 	}
+	if portal.lastShortcut != "ctrl+v" {
+		t.Fatalf("portal last shortcut = %q, want %q", portal.lastShortcut, "ctrl+v")
+	}
 }
 
 func TestDeliverKeepsClipboardSuccessWhenPortalPasteFails(t *testing.T) {
@@ -215,6 +222,93 @@ func TestDeliverKeepsClipboardSuccessWhenPortalPasteFails(t *testing.T) {
 	}
 	if delivery.PasteWarning == "" {
 		t.Fatal("expected paste warning")
+	}
+}
+
+func TestDeliverRetriesInvalidPortalSession(t *testing.T) {
+	t.Parallel()
+
+	first := &fakePortalSession{clipboardErr: fmt.Errorf("Invalid session")}
+	second := &fakePortalSession{}
+	factoryCalls := 0
+
+	coord := &Coordinator{
+		ClipboardPlan:      "portal",
+		PastePlan:          "unavailable",
+		UsePortalClipboard: true,
+		PortalFactory: func(_ context.Context, _ PortalRequest) (PortalSession, error) {
+			factoryCalls++
+			if factoryCalls == 1 {
+				return first, nil
+			}
+			return second, nil
+		},
+	}
+
+	delivery, err := coord.Deliver(context.Background(), "retry me")
+	if err != nil {
+		t.Fatalf("Deliver() error = %v", err)
+	}
+	if !delivery.ClipboardWritten || delivery.ClipboardMethod != "portal" {
+		t.Fatalf("unexpected delivery result: %+v", delivery)
+	}
+	if factoryCalls != 2 {
+		t.Fatalf("factory calls = %d, want 2", factoryCalls)
+	}
+	if second.clipboard != "retry me" {
+		t.Fatalf("portal clipboard = %q, want %q", second.clipboard, "retry me")
+	}
+}
+
+func TestDeliverUsesTerminalPasteShortcutForFocusedTerminal(t *testing.T) {
+	dir := t.TempDir()
+	clipboardSink := filepath.Join(dir, "clipboard.txt")
+	pasteSink := filepath.Join(dir, "paste.txt")
+	clipboardBin := filepath.Join(dir, "fake-wl-copy.sh")
+	pasteBin := filepath.Join(dir, "ydotool")
+
+	if err := os.WriteFile(clipboardBin, []byte("#!/bin/sh\ncat > \"$COE_CLIPBOARD_SINK\"\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(clipboard) error = %v", err)
+	}
+	if err := os.WriteFile(pasteBin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$COE_PASTE_SINK\"\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(paste) error = %v", err)
+	}
+
+	t.Setenv("COE_CLIPBOARD_SINK", clipboardSink)
+	t.Setenv("COE_PASTE_SINK", pasteSink)
+
+	coord := &Coordinator{
+		ClipboardPlan:         "command",
+		PastePlan:             "command",
+		ClipboardBinary:       clipboardBin,
+		PasteBinary:           pasteBin,
+		EnableAutoPaste:       true,
+		PasteShortcut:         "ctrl+v",
+		TerminalPasteShortcut: "ctrl+shift+v",
+		FocusProvider: fixedFocusProvider{
+			target: focus.Target{AppID: "org.gnome.Console"},
+		},
+	}
+
+	delivery, err := coord.Deliver(context.Background(), "hello")
+	if err != nil {
+		t.Fatalf("Deliver() error = %v", err)
+	}
+	if delivery.PasteShortcut != "ctrl+shift+v" {
+		t.Fatalf("paste shortcut = %q, want %q", delivery.PasteShortcut, "ctrl+shift+v")
+	}
+	if delivery.PasteTarget != "org.gnome.Console" {
+		t.Fatalf("paste target = %q, want %q", delivery.PasteTarget, "org.gnome.Console")
+	}
+
+	data, err := os.ReadFile(pasteSink)
+	if err != nil {
+		t.Fatalf("ReadFile(paste) error = %v", err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := "key\n29:1\n42:1\n47:1\n47:0\n42:0\n29:0"
+	if got != want {
+		t.Fatalf("paste command args = %q, want %q", got, want)
 	}
 }
 
@@ -261,7 +355,25 @@ type fakePortalSession struct {
 	clipboardErr error
 	pasteCalls   int
 	pasteErr     error
+	lastShortcut string
 	restoreToken string
+}
+
+type fixedFocusProvider struct {
+	target focus.Target
+	err    error
+}
+
+func (p fixedFocusProvider) Focused(context.Context) (focus.Target, error) {
+	return p.target, p.err
+}
+
+func (fixedFocusProvider) Summary() string {
+	return "fixed"
+}
+
+func (fixedFocusProvider) Close() error {
+	return nil
 }
 
 func (f *fakePortalSession) SetClipboard(_ context.Context, text string) error {
@@ -272,8 +384,9 @@ func (f *fakePortalSession) SetClipboard(_ context.Context, text string) error {
 	return nil
 }
 
-func (f *fakePortalSession) SendPaste(context.Context) error {
+func (f *fakePortalSession) SendPaste(_ context.Context, shortcut string) error {
 	f.pasteCalls++
+	f.lastShortcut = shortcut
 	return f.pasteErr
 }
 
