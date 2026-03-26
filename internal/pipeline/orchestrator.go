@@ -20,6 +20,7 @@ type Orchestrator struct {
 
 type Result struct {
 	ByteCount         int
+	AudioActivity     audio.Activity
 	Transcript        string
 	TranscriptWarning string
 	Corrected         string
@@ -46,6 +47,16 @@ func (o Orchestrator) ProcessCapture(ctx context.Context, capture audio.Result) 
 		ByteCount: capture.ByteCount,
 	}
 	if capture.ByteCount == 0 {
+		return result, nil
+	}
+
+	result.AudioActivity = audio.AnalyzeActivity(capture, audio.DefaultActivityThresholds())
+	if result.AudioActivity.Supported && result.AudioActivity.ApproxSilent {
+		result.TranscriptWarning = "captured audio is near-silent; skipped transcription"
+		return result, nil
+	}
+	if result.AudioActivity.Supported && result.AudioActivity.ApproxCorrupt {
+		result.TranscriptWarning = "captured audio appears saturated or corrupted; skipped transcription"
 		return result, nil
 	}
 

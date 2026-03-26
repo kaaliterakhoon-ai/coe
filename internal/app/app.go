@@ -234,6 +234,10 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				}
 
 				fmt.Fprintf(w, "recording stopped: bytes=%d duration=%s\n", result.ByteCount, result.Duration.Round(time.Millisecond))
+				activity := processedActivityPreview(result)
+				if activity != "" {
+					fmt.Fprintf(w, "audio activity: %s\n", activity)
+				}
 				if result.Stderr != "" {
 					fmt.Fprintf(w, "recording stderr: %q\n", result.Stderr)
 				}
@@ -246,6 +250,9 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				}
 
 				fmt.Fprintf(w, "pipeline result: transcript=%q corrected=%q\n", processed.Transcript, processed.Corrected)
+				if processed.AudioActivity.Supported {
+					fmt.Fprintf(w, "pipeline audio activity: %s\n", processed.AudioActivity.Summary())
+				}
 				if processed.TranscriptWarning != "" {
 					fmt.Fprintf(w, "transcript warning: %s\n", processed.TranscriptWarning)
 				}
@@ -267,6 +274,14 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			}
 		}
 	}
+}
+
+func processedActivityPreview(result audio.Result) string {
+	activity := audio.AnalyzeActivity(result, audio.DefaultActivityThresholds())
+	if !activity.Supported {
+		return ""
+	}
+	return activity.Summary()
 }
 
 func (a *App) handleControl(_ context.Context, req control.Request) control.Response {

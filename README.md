@@ -16,6 +16,8 @@ Validated so far:
 - transcript cleanup through OpenAI Responses
 - final text written through portal clipboard
 - final text auto-pasted through portal keyboard injection
+- near-silent recordings are short-circuited locally before ASR
+- severely clipped or corrupted recordings are short-circuited locally before ASR
 - command-line fallbacks through `wl-copy` and `ydotool`
 
 Important limits in the current codebase:
@@ -32,6 +34,7 @@ Portal access persistence:
 System notifications:
 
 - by default, COE emits GNOME desktop notifications for completed dictation and failure cases
+- near-silent or corrupt captures are reported locally and skipped before network transcription
 - recording-start notifications stay off by default to avoid spamming every trigger cycle
 
 ## Requirements

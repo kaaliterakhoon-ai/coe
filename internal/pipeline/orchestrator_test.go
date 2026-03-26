@@ -42,6 +42,81 @@ func TestProcessCaptureSkipsCorrectionWhenTranscriptIsEmpty(t *testing.T) {
 	}
 }
 
+func TestProcessCaptureSkipsASRForNearSilentAudio(t *testing.T) {
+	t.Parallel()
+
+	corrector := &fakeCorrector{}
+	asrClient := &countingASR{text: "unused"}
+	orchestrator := Orchestrator{
+		Recorder:  fakeRecorder{},
+		ASR:       asrClient,
+		Corrector: corrector,
+		Output:    &output.Coordinator{},
+	}
+
+	result, err := orchestrator.ProcessCapture(context.Background(), audio.Result{
+		Data:       make([]byte, 1600),
+		ByteCount:  1600,
+		SampleRate: 16000,
+		Channels:   1,
+		Format:     "s16",
+	})
+	if err != nil {
+		t.Fatalf("ProcessCapture() error = %v", err)
+	}
+	if result.TranscriptWarning != "captured audio is near-silent; skipped transcription" {
+		t.Fatalf("unexpected transcript warning %q", result.TranscriptWarning)
+	}
+	if asrClient.calls != 0 {
+		t.Fatalf("ASR calls = %d, want 0", asrClient.calls)
+	}
+	if corrector.calls != 0 {
+		t.Fatalf("corrector calls = %d, want 0", corrector.calls)
+	}
+}
+
+func TestProcessCaptureSkipsASRForCorruptAudio(t *testing.T) {
+	t.Parallel()
+
+	corrector := &fakeCorrector{}
+	asrClient := &countingASR{text: "unused"}
+	orchestrator := Orchestrator{
+		Recorder:  fakeRecorder{},
+		ASR:       asrClient,
+		Corrector: corrector,
+		Output:    &output.Coordinator{},
+	}
+
+	data := make([]byte, 0, 4000)
+	for i := 0; i < 2000; i++ {
+		if i%2 == 0 {
+			data = append(data, 0xff, 0x7f)
+		} else {
+			data = append(data, 0x00, 0x80)
+		}
+	}
+
+	result, err := orchestrator.ProcessCapture(context.Background(), audio.Result{
+		Data:       data,
+		ByteCount:  len(data),
+		SampleRate: 16000,
+		Channels:   1,
+		Format:     "s16",
+	})
+	if err != nil {
+		t.Fatalf("ProcessCapture() error = %v", err)
+	}
+	if result.TranscriptWarning != "captured audio appears saturated or corrupted; skipped transcription" {
+		t.Fatalf("unexpected transcript warning %q", result.TranscriptWarning)
+	}
+	if asrClient.calls != 0 {
+		t.Fatalf("ASR calls = %d, want 0", asrClient.calls)
+	}
+	if corrector.calls != 0 {
+		t.Fatalf("corrector calls = %d, want 0", corrector.calls)
+	}
+}
+
 type fakeRecorder struct{}
 
 func (fakeRecorder) Start(context.Context) (audio.CaptureSession, error) {
@@ -62,6 +137,20 @@ func (f fakeASR) Transcribe(context.Context, audio.Result) (asr.Result, error) {
 
 func (f fakeASR) Name() string {
 	return "fake-asr"
+}
+
+type countingASR struct {
+	text  string
+	calls int
+}
+
+func (f *countingASR) Transcribe(context.Context, audio.Result) (asr.Result, error) {
+	f.calls++
+	return asr.Result{Text: f.text}, nil
+}
+
+func (f *countingASR) Name() string {
+	return "counting-asr"
 }
 
 type fakeCorrector struct {

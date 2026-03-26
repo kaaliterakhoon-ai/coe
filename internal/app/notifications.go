@@ -43,7 +43,7 @@ func (a *App) notificationForProcessing(result pipeline.Result) notify.Message {
 	if result.Transcript == "" {
 		return notify.Message{
 			Title:   "No speech detected",
-			Body:    normalizeBody(result.TranscriptWarning, "No transcript was produced. The microphone input may be muted or too quiet."),
+			Body:    normalizeBody(result.TranscriptWarning, "No transcript was produced. The microphone input may be muted, too quiet, near-silent, or corrupted."),
 			Urgency: notify.UrgencyNormal,
 			Timeout: 4500 * time.Millisecond,
 		}
