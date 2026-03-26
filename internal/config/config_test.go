@@ -29,4 +29,7 @@ func TestWriteDefaultAndLoad(t *testing.T) {
 	if cfg.Audio.RecorderBinary != "pw-record" {
 		t.Fatalf("unexpected recorder %q", cfg.Audio.RecorderBinary)
 	}
+	if !cfg.Notifications.EnableSystem {
+		t.Fatal("expected system notifications to be enabled by default")
+	}
 }

@@ -6,7 +6,7 @@ GNOME-first, Wayland-first dictation assistant in Go.
 
 The repository is no longer only a skeleton. The currently verified path is:
 
-`GNOME custom shortcut -> coe trigger toggle -> pw-record -> OpenAI ASR -> OpenAI LLM correction -> wl-copy`
+`GNOME custom shortcut -> coe trigger toggle -> pw-record -> OpenAI ASR -> OpenAI LLM correction -> portal clipboard -> portal auto-paste`
 
 Validated so far:
 
@@ -28,6 +28,11 @@ Portal access persistence:
 - when `persist_portal_access` is `true`, the app stores the portal restore token locally
 - after the first successful authorization, later runs should reuse that token instead of prompting every time
 - if GNOME or the portal backend rejects the stored token, the app falls back to a fresh authorization flow
+
+System notifications:
+
+- by default, COE emits GNOME desktop notifications for completed dictation and failure cases
+- recording-start notifications stay off by default to avoid spamming every trigger cycle
 
 ## Requirements
 
@@ -127,6 +132,12 @@ Output defaults:
 - clipboard: `wl-copy`
 - clipboard and paste will prefer portal paths when the runtime exposes them
 - `wl-copy` and `ydotool` remain command-line fallbacks
+
+Notification defaults:
+
+- `enable_system: true`
+- `show_text_preview: true`
+- `notify_on_recording_start: false`
 
 ## Commands
 

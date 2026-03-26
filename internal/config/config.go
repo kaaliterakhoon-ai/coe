@@ -11,12 +11,13 @@ import (
 const envConfigPath = "COE_CONFIG"
 
 type Config struct {
-	Runtime RuntimeConfig `yaml:"runtime"`
-	Hotkey  HotkeyConfig  `yaml:"hotkey"`
-	Audio   AudioConfig   `yaml:"audio"`
-	ASR     Provider      `yaml:"asr"`
-	LLM     Provider      `yaml:"llm"`
-	Output  OutputConfig  `yaml:"output"`
+	Runtime       RuntimeConfig       `yaml:"runtime"`
+	Hotkey        HotkeyConfig        `yaml:"hotkey"`
+	Audio         AudioConfig         `yaml:"audio"`
+	ASR           Provider            `yaml:"asr"`
+	LLM           Provider            `yaml:"llm"`
+	Output        OutputConfig        `yaml:"output"`
+	Notifications NotificationsConfig `yaml:"notifications"`
 }
 
 type RuntimeConfig struct {
@@ -52,6 +53,12 @@ type OutputConfig struct {
 	PersistPortalAccess    bool   `yaml:"persist_portal_access"`
 	ClipboardBinary        string `yaml:"clipboard_binary"`
 	PasteBinary            string `yaml:"paste_binary"`
+}
+
+type NotificationsConfig struct {
+	EnableSystem           bool `yaml:"enable_system"`
+	ShowTextPreview        bool `yaml:"show_text_preview"`
+	NotifyOnRecordingStart bool `yaml:"notify_on_recording_start"`
 }
 
 func Default() Config {
@@ -92,6 +99,11 @@ func Default() Config {
 			PersistPortalAccess:    true,
 			ClipboardBinary:        "wl-copy",
 			PasteBinary:            "",
+		},
+		Notifications: NotificationsConfig{
+			EnableSystem:           true,
+			ShowTextPreview:        true,
+			NotifyOnRecordingStart: false,
 		},
 	}
 }

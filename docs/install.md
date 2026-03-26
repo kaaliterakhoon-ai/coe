@@ -57,6 +57,11 @@ Runtime state:
 
 The state file stores the portal restore token used to avoid repeated authorization prompts when the desktop backend accepts persistence.
 
+Desktop notifications:
+
+- successful dictation and failure cases are reported through `org.freedesktop.Notifications`
+- recording-start notifications are disabled by default
+
 ## GNOME shortcut
 
 Add a GNOME custom shortcut that runs:

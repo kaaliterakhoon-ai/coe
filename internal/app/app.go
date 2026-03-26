@@ -13,6 +13,7 @@ import (
 	"coe/internal/control"
 	"coe/internal/hotkey"
 	"coe/internal/llm"
+	"coe/internal/notify"
 	"coe/internal/output"
 	"coe/internal/pipeline"
 	"coe/internal/state"
@@ -24,6 +25,8 @@ type App struct {
 	Hotkey            hotkey.Service
 	ExternalHotkey    *hotkey.ExternalTriggerService
 	ControlSocketPath string
+	Notifier          notify.Service
+	StartupWarnings   []string
 	Pipeline          pipeline.Orchestrator
 }
 
@@ -83,12 +86,25 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		controlSocketPath = socketPath
 	}
 
+	notificationService := notify.Service(notify.Disabled{})
+	startupWarnings := make([]string, 0, 1)
+	if cfg.Notifications.EnableSystem {
+		service, err := notify.ConnectSession("coe")
+		if err != nil {
+			startupWarnings = append(startupWarnings, fmt.Sprintf("system notifications unavailable: %v", err))
+		} else {
+			notificationService = service
+		}
+	}
+
 	instance := &App{
 		Config:            cfg,
 		Caps:              caps,
 		Hotkey:            service,
 		ExternalHotkey:    external,
 		ControlSocketPath: controlSocketPath,
+		Notifier:          notificationService,
+		StartupWarnings:   startupWarnings,
 		Pipeline: pipeline.Orchestrator{
 			Recorder:  recorder,
 			ASR:       asrClient,
@@ -112,6 +128,9 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 
 func (a *App) Serve(ctx context.Context, w io.Writer) error {
 	defer func() {
+		if a.Notifier != nil {
+			_ = a.Notifier.Close()
+		}
 		if a.Pipeline.Output != nil {
 			_ = a.Pipeline.Output.Close()
 		}
@@ -121,8 +140,12 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 	fmt.Fprintln(w, a.Caps.Report())
 	fmt.Fprintf(w, "hotkey wiring: %s\n", a.Hotkey.Plan())
 	fmt.Fprintf(w, "pipeline wiring: %s\n", a.Pipeline.Summary())
+	fmt.Fprintf(w, "notification wiring: %s\n", blankIfEmpty(a.Notifier.Summary(), "disabled"))
 	if a.ControlSocketPath != "" {
 		fmt.Fprintf(w, "control socket: %s\n", a.ControlSocketPath)
+	}
+	for _, warning := range a.StartupWarnings {
+		fmt.Fprintf(w, "startup warning: %s\n", warning)
 	}
 	fmt.Fprintln(w, "runtime is scaffolded; waiting for signal")
 
@@ -181,11 +204,13 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				session, err := a.Pipeline.Recorder.Start(ctx)
 				if err != nil {
 					fmt.Fprintf(w, "recording start failed: %v\n", err)
+					a.emitNotification(w, notificationForFailure("Recording failed to start", err))
 					continue
 				}
 
 				captureSession = session
 				fmt.Fprintln(w, "recording started")
+				a.emitNotification(w, a.notificationForStart())
 			case hotkey.Deactivated:
 				if captureSession == nil {
 					fmt.Fprintln(w, "recording is not active; ignoring deactivate event")
@@ -201,6 +226,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 					if result.Stderr != "" {
 						fmt.Fprintf(w, "recording stderr: %q\n", result.Stderr)
 					}
+					a.emitNotification(w, notificationForFailure("Recording failed", err))
 					continue
 				}
 				if err != nil {
@@ -215,6 +241,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				processed, err := a.Pipeline.ProcessCapture(ctx, result)
 				if err != nil {
 					fmt.Fprintf(w, "pipeline processing failed: %v\n", err)
+					a.emitNotification(w, notificationForFailure("Dictation failed", err))
 					continue
 				}
 
@@ -234,6 +261,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				if processed.Output.PasteWarning != "" {
 					fmt.Fprintf(w, "paste warning: %s\n", processed.Output.PasteWarning)
 				}
+				a.emitNotification(w, a.notificationForProcessing(processed))
 			default:
 				fmt.Fprintf(w, "unknown trigger event: %s\n", event.Type)
 			}
