@@ -2,9 +2,11 @@
 
 [English](./README.md) | [简体中文](./docs/README.zh-CN.md) | [日本語](./docs/README.ja.md)
 
-Coe is a dictation tool for GNOME on Wayland on Linux.
+Coe is a voice input tool for Linux on GNOME on Wayland.
 
-It is a Linux-focused recreation of [`missuo/koe`](https://github.com/missuo/koe). The goal has not changed: press a hotkey, speak, let an LLM clean up the transcript, and put the text back into the active app.
+It is a Linux-focused tribute to [`missuo/koe`](https://github.com/missuo/koe). The goal has not changed: press a hotkey, speak, let an LLM clean up the transcript, and put the text back into the active app.
+
+> Today, GNOME on Wayland is the only fully polished target. Other Linux desktops or X11 sessions may still run parts of the pipeline. Feel free to try.
 
 ## The Name
 
@@ -12,96 +14,58 @@ It is a Linux-focused recreation of [`missuo/koe`](https://github.com/missuo/koe
 
 ## Why Coe?
 
-Most Linux voice input tools are not pleasant to use. Coe tries to make this usable:
+The first author uses Linux, but people do not love building desktop software for Linux. Coe tries to make this practical:
 
-- GNOME first, Wayland first
 - Background process, minimal UI surface
 - Plain YAML config
 - Reuse platform capabilities first: portal clipboard, portal paste, desktop notifications
-- Keep a degraded fallback path
+- Make voice input work as well as possible inside those limits
 
 ## How It Works
 
 The runtime flow is:
 
-1. Keep `coe serve` running.
-2. Trigger dictation with `coe trigger toggle`. Today GNOME usually calls this through a custom shortcut. When `GlobalShortcuts` is missing, Coe inserts and maintains that shortcut at startup.
+1. Keep `coe serve` running in the background, usually through a user-level `systemd` service.
+2. Trigger dictation with `coe trigger toggle`. Today GNOME usually calls this through a custom shortcut. Other desktop environments can in principle bind the same command to a hotkey too.
 3. Record microphone input with `pw-record`.
-4. Reject near-silent or obviously corrupt captures before they leave the machine.
-5. Send the audio to ASR. OpenAI Audio Transcriptions is the default, but the provider is configurable.
+4. Reject near-silent or obviously corrupt captures instead of sending them out.
+5. Send the audio to ASR. Coe supports OpenAI, SenseVoice, or local `whisper.cpp`.
 6. Optionally send the transcript to an OpenAI-compatible text model for cleanup.
 7. Write the corrected text through the clipboard path.
 8. Paste it back into the focused app when the runtime allows it.
 
 Notes:
 
-- ASR: optional local `whisper.cpp` provider through `whisper-cli`
-- ASR: optional external `SenseVoice` FastAPI provider
-- LLM correction: OpenAI-compatible Chat Completions through `uniai` by default, or Responses API when configured
-- Output: portal clipboard and portal paste first, `wl-copy` and `ydotool` as fallbacks
+- LLM cleanup: any OpenAI-compatible Chat Completions API by default, or the OpenAI Responses API when configured
+- Output: prefer GNOME portal clipboard and portal paste; fall back to `wl-copy` and `ydotool` when needed
+
+## GNOME-Specific Integration
+
+These parts are GNOME-specific today:
+
+- the install script installs a GNOME Shell extension for focus-aware paste
+- when `GlobalShortcuts` is unavailable, Coe auto-manages a GNOME custom shortcut fallback
+- focus-aware paste depends on a GNOME Shell extension that exposes the focused window `wm_class` over D-Bus
+
+The core dictation pipeline is less GNOME-specific:
+
+- recording through `pw-record`
+- ASR through OpenAI, `whisper.cpp`, or SenseVoice
+- LLM cleanup
+- clipboard and paste delivery, as far as the current desktop runtime allows
 
 ## Installation
 
-### Install Dependencies
+### Quick Install
 
-Runtime requirements:
-
-- Wayland session
-- GNOME desktop
-- `pw-record`
-- `wl-copy`
-- `OPENAI_API_KEY`
-
-You can keep the key in `~/.config/coe/env`, or write it directly into `asr.api_key` and `llm.api_key` in `config.yaml`.
-
-Optional:
-
-- `ydotool`, if you want to try the command-line paste fallback
-- `whisper-cli` and a Whisper model file, if you want local ASR
-- a running SenseVoice FastAPI service, if you want local network ASR through SenseVoice
-
-On Ubuntu, install the command-line dependencies with:
+The simplest path is the release installer:
 
 ```bash
-sudo apt update
-sudo apt install -y pipewire-bin wl-clipboard
+curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe/refs/heads/master/scripts/install.sh
+bash /tmp/install.sh
 ```
 
-Optional paste fallback:
-
-```bash
-sudo apt install -y ydotool
-```
-
-### Download a Prebuilt Package
-
-[Download](https://github.com/quailyquaily/coe/releases)
-
-### Or Build from Source
-
-#### Prerequisites
-
-```bash
-git clone https://github.com/quailyquaily/coe.git
-cd coe
-go build -o coe ./cmd/coe
-```
-
-## Run
-
-```bash
-./coe serve
-```
-
-### Install as a User `systemd` Service
-
-If you want to install the current alpha as a persistent user service:
-
-```bash
-./scripts/install.sh
-```
-
-The script downloads the matching GitHub Release tarball for your Linux architecture, then installs:
+It downloads the matching GitHub Release tarball for your Linux architecture, then installs:
 
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
@@ -113,21 +77,38 @@ After installation it also:
 - runs `coe doctor`
 - restarts `coe.service`
 - checks whether `coe.service` is active
-- prints the installed file locations
+- prints where the binary, config, env file, systemd unit, and GNOME extension were installed
 
-You can also pin a version:
+If you use cloud ASR or LLM providers, put the required API key into `~/.config/coe/env` or write it directly into `~/.config/coe/config.yaml`.
+
+After install, log out and log back in once so GNOME Shell and the user service session both pick up the new extension cleanly.
+
+Then open any app with an input focus, press the default shortcut `<Shift><Super>d`, speak, then press it again. If all is well, your speech should come back as text in that app.
+
+### Install Dependencies
+
+Runtime requirements:
+
+- Wayland session
+- GNOME desktop
+- `pw-record`
+- `wl-copy`
+
+Optional:
+
+- clipboard: `ydotool`, if you want the command-line paste fallback
+- LLM: any OpenAI-compatible API for text cleanup, with the key in `~/.config/coe/env` or `llm.api_key`
+- ASR: `whisper-cli` and a Whisper model file, if you want local ASR
+- ASR: a running SenseVoice FastAPI service, if you want local network ASR
+- ASR: OpenAI transcription, with the key in `~/.config/coe/env` or `asr.api_key`
+
+On Ubuntu, install the command-line dependencies with:
 
 ```bash
-./scripts/install.sh v0.0.4
+sudo apt update
+sudo apt install -y pipewire-bin wl-clipboard
+sudo apt install -y ydotool
 ```
-
-If you use cloud ASR or LLM providers, put the required API key into `~/.config/coe/env` or write it directly into `~/.config/coe/config.yaml`. After install, log out and log back in once so GNOME Shell and the user service session both pick up the new extension cleanly. Then restart the service if needed:
-
-```bash
-systemctl --user restart coe.service
-```
-
-If you prefer, you can also leave `~/.config/coe/env` empty and write the key directly into `~/.config/coe/config.yaml` under `asr.api_key` and `llm.api_key`.
 
 ## Hotkey to Start and Stop Dictation
 

@@ -2,9 +2,11 @@
 
 [English](../README.md) | [简体中文](./README.zh-CN.md)
 
-Coe は Linux 上で GNOME on Wayland 向けに動くディクテーションツールです。
+Coe は Linux 上で GNOME on Wayland 向けに動く音声入力ツールです。
 
-これは [`missuo/koe`](https://github.com/missuo/koe) の Linux 向け再構成版です。目標は変わりません。ホットキーを押し、話し、LLM に文字起こしを整えさせ、そのテキストを今使っているアプリに戻します。
+これは [`missuo/koe`](https://github.com/missuo/koe) への Linux 向けオマージュです。目標は変わりません。ホットキーを押し、話し、LLM に文字起こしを整えさせ、そのテキストを今使っているアプリに戻します。
+
+> 現時点で唯一しっかり磨かれている対象は GNOME on Wayland です。他の Linux デスクトップや X11 セッションでも一部は動くかもしれません。試してみるのは歓迎です。
 
 ## 名前
 
@@ -12,102 +14,58 @@ Coe は Linux 上で GNOME on Wayland 向けに動くディクテーションツ
 
 ## なぜ Coe か
 
-Linux の音声入力ツールは、だいたい次のどれかで使いづらくなります。
+第一作者は Linux を使っていますが、いま Linux 向けのデスクトップソフトを作りたがる人は多くありません。だから Coe は次を目指します。
 
-- X11 時代の前提に依存している
-- 基本設定が GUI の奥に隠れている
-- Wayland のセキュリティモデルに合っていない
-
-Coe は、もっと実用的な形を狙います。
-
-- GNOME first、Wayland first
 - バックグラウンドで動かし、UI 面をできるだけ小さくする
 - 設定はプレーンな YAML
 - portal clipboard、portal paste、デスクトップ通知のような既存機能を優先的に使う
-- 降格経路をきちんと用意する
+- 制約の中でも、できるだけちゃんと音声入力を成立させる
 
 ## 仕組み
 
 実行フローは次の通りです。
 
-1. `coe serve` を起動したままにします。
-2. `coe trigger toggle` でディクテーションを開始します。現在は GNOME のカスタムショートカットから呼ばれます。`GlobalShortcuts` がない場合、Coe は起動時にそのショートカットを挿入し、存在を維持します。
+1. 通常は user-level `systemd` 経由で、`coe serve` をバックグラウンドで動かし続けます。
+2. `coe trigger toggle` でディクテーションを開始します。現在は GNOME のカスタムショートカットから呼ばれます。他の DE でも理屈の上では同じコマンドをホットキーに割り当てられます。
 3. `pw-record` でマイク入力を録音します。
-4. 音声を外へ送る前に、ほぼ無音または明らかに壊れた録音を弾きます。
-5. 音声を ASR に送ります。デフォルトは OpenAI Audio Transcriptions ですが、provider は差し替え可能です。
+4. ほぼ無音または明らかに壊れた録音は送らずに止めます。
+5. 音声を ASR に送ります。OpenAI、SenseVoice、ローカル `whisper.cpp` に対応します。
 6. 必要なら、転写結果を OpenAI 互換のテキストモデルへ送り、整形します。
 7. 整形したテキストをクリップボード経由で書き戻します。
 8. 実行環境が許す場合、フォーカス中のアプリへそのまま貼り付けます。
 
 補足:
 
-- ASR: `whisper-cli` 経由のローカル `whisper.cpp` にも対応
-- ASR: 外部の `SenseVoice` FastAPI にも対応可能
-- LLM 整形: デフォルトでは `uniai` 経由の OpenAI 互換 Chat Completions。設定で Responses API にも切り替え可能
-- 出力: portal clipboard と portal paste を優先し、`wl-copy` と `ydotool` を fallback として残す
+- LLM 整形: デフォルトでは OpenAI 互換 Chat Completions API を使い、必要なら OpenAI Responses API にも切り替え可能です
+- 出力: まず GNOME portal clipboard と portal paste を使い、無理なら `wl-copy` と `ydotool` に落とします
+
+## GNOME 専用の部分
+
+現時点で GNOME 専用なのは次です。
+
+- インストールスクリプトが GNOME Shell 拡張を入れて、focus-aware paste を有効にすること
+- `GlobalShortcuts` が使えないとき、Coe が GNOME のカスタムショートカット fallback を自動管理すること
+- focus-aware paste が、GNOME Shell 拡張から D-Bus 経由で `wm_class` を読むこと
+
+GNOME 依存が比較的薄いのは、コアの音声入力パイプラインです。
+
+- `pw-record` による録音
+- OpenAI、`whisper.cpp`、SenseVoice による ASR
+- LLM 整形
+- そのデスクトップが許す範囲でのクリップボードと貼り付け
 
 ## インストール
 
-### 依存のインストール
+### クイックインストール
 
-実行時に必要なもの:
-
-- Wayland セッション
-- GNOME デスクトップ
-- `pw-record`
-- `wl-copy`
-- `OPENAI_API_KEY`
-
-キーは `~/.config/coe/env` に置いてもよいですし、`config.yaml` の `asr.api_key` と `llm.api_key` に直接書いてもかまいません。
-
-任意:
-
-- `ydotool`。コマンドラインの paste fallback を試したい場合
-- `whisper-cli` と Whisper モデルファイル。ローカル ASR を使いたい場合
-- 動作中の SenseVoice FastAPI サービス。SenseVoice 経由のローカルネットワーク ASR を使いたい場合
-
-Ubuntu では、コマンドライン依存を次のように入れられます。
+一番簡単なのは release 用インストーラを使う方法です。
 
 ```bash
-sudo apt update
-sudo apt install -y pipewire-bin wl-clipboard
+curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe/refs/heads/master/scripts/install.sh
+bash /tmp/install.sh
 ```
 
-任意の paste fallback:
-
-```bash
-sudo apt install -y ydotool
-```
-
-### 事前ビルド済みパッケージをダウンロード
-
-[Download](https://github.com/quailyquaily/coe/releases)
-
-### またはソースからビルド
-
-#### 前提
-
-```bash
-git clone https://github.com/quailyquaily/coe.git
-cd coe
-go build -o coe ./cmd/coe
-```
-
-## 実行
-
-```bash
-./coe serve
-```
-
-### ユーザー `systemd` サービスとしてインストール
-
-現在の alpha を常駐するユーザーサービスとして入れるには:
-
-```bash
-./scripts/install.sh
-```
-
-スクリプトは、マシンのアーキテクチャに合った GitHub Release tarball をダウンロードしてから、次を入れます。
+これは、マシンのアーキテクチャに合った GitHub Release tarball をダウンロードしてから、次を入れます。
 
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
@@ -121,19 +79,36 @@ go build -o coe ./cmd/coe
 - `coe.service` が active か確認
 - バイナリ、設定、env、systemd unit、GNOME 拡張のインストール先を表示
 
-バージョンを固定することもできます。
+クラウド ASR や LLM provider を使う場合は、必要な API キーを `~/.config/coe/env` に書くか、`~/.config/coe/config.yaml` に直接書いてください。
+
+インストール後は一度ログアウトして再ログインしてください。GNOME Shell とユーザーサービスセッションの両方が新しい拡張をきれいに読み直せます。
+
+そのあと入力欄のあるアプリを開き、デフォルトショートカット `<Shift><Super>d` を押して話し、もう一度押してください。うまくいけば、そのアプリに話した内容がテキストとして入ります。
+
+### 依存のインストール
+
+実行時に必要なもの:
+
+- Wayland セッション
+- GNOME デスクトップ
+- `pw-record`
+- `wl-copy`
+
+任意:
+
+- クリップボード: `ydotool`。コマンドラインの paste fallback を試したい場合
+- LLM: OpenAI 互換 API。必要なキーは `~/.config/coe/env` または `llm.api_key`
+- ASR: `whisper-cli` と Whisper モデルファイル。ローカル ASR を使いたい場合
+- ASR: 動作中の SenseVoice FastAPI サービス。SenseVoice 経由のローカルネットワーク ASR を使いたい場合
+- ASR: OpenAI transcription。必要なキーは `~/.config/coe/env` または `asr.api_key`
+
+Ubuntu では、コマンドライン依存を次のように入れられます。
 
 ```bash
-./scripts/install.sh v0.0.4
+sudo apt update
+sudo apt install -y pipewire-bin wl-clipboard
+sudo apt install -y ydotool
 ```
-
-クラウド ASR や LLM provider を使う場合は、必要な API キーを `~/.config/coe/env` に書くか、`~/.config/coe/config.yaml` に直接書いてください。インストール後は一度ログアウトして再ログインしてください。GNOME Shell とユーザーサービスセッションの両方が新しい拡張をきれいに読み直せます。必要ならその後でサービスを再起動します。
-
-```bash
-systemctl --user restart coe.service
-```
-
-必要なら `~/.config/coe/env` を空のままにし、`~/.config/coe/config.yaml` の `asr.api_key` と `llm.api_key` に直接書いてもかまいません。
 
 ## ディクテーション開始・終了用ホットキー
 

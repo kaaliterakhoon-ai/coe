@@ -2,106 +2,60 @@
 
 [English](../README.md) | [日本語](./README.ja.md)
 
-Coe 是一个 Linux 上面向 GNOME on Wayland 的听写工具。
+Coe 是一个 Linux 上面向 GNOME on Wayland 的语音输入法。
 
-它是对 [`missuo/koe`](https://github.com/missuo/koe) 的 Linux 向复刻。目标没有变：按下热键，说话，让 LLM 整理转写结果，再把文本放回当前应用。
+它是对 [`missuo/koe`](https://github.com/missuo/koe) 的 Linux 向致敬。目标没有变：按下热键，说话，让 LLM 整理转写结果，再把文本放回当前应用。
+
+> 当前唯一完整打磨过的目标平台是 GNOME on Wayland。其他 Linux 桌面或 X11 会话，也许能跑通部分链路。欢迎试试看。
 
 ## 名字
 
-`coe` 故意和 `koe` 很接近。这个项目是在向 Koe 致意，但目标平台是 Linux 和 Wayland。日语汉字古字 `聲` 的意思就是声音，是这个工具要做的事。
+`coe` 故意和 `koe` 很接近（发音也一样）。日语汉字古字 `聲` 的意思就是声音，是这个工具要做的事。
 
 ## 为什么是 Coe？
 
-多数 Linux 语音输入工具都不咋好用。Coe 想做好用：
+因为第一作者用的是 Linux，但是现在大家不太喜欢给 Linux 开发桌面软件。所以，第一作者希望 Coe 可以：
 
-- GNOME first，Wayland first
 - 后台运行，尽量减少 UI 面
 - 用纯 YAML 配置
 - 优先复用别人的能力：portal clipboard、portal paste、桌面通知
-- 提供降级路径
+- 尽量在限制下把语音输入做好。
 
 ## 工作方式
 
 运行流程如下：
 
-1. 保持 `coe serve` 运行。
-2. 用 `coe trigger toggle` 触发听写（目前由 GNOME 自定义快捷键调用；在没有 `GlobalShortcuts` 时，Coe 会在启动时插入这个自定义快捷键，自动确保这条快捷键存在）
+1. 保持 `coe serve` 后台运行，默认使用了 user level systemd 。
+2. 用 `coe trigger toggle` 触发听写：目前由 GNOME 自定义快捷键调用，理论上不同的 DE 或者系统也可以依次绑定这个命令到热键
 3. 用 `pw-record` 录制麦克风输入。
-4. 在音频离开本机前，先拦截接近静音或明显损坏的录音。
-5. 把音频发送到 ASR。默认是 OpenAI Audio Transcriptions，但 provider 可配置。
-6. 可选：把转写文本发送给一个 OpenAI 兼容文本模型做矫正。
+4. 拦截接近静音或明显损坏的录音，不发送。
+5. 把音频发送到 ASR。支持 OpenAI, SenseVoice, 或者本地 Whisper.cpp。
+6. 可选流程：把 ASR 转写文本发送给 LLM 文本模型做矫正。
 7. 通过剪贴板路径写回修正后的文本。
-8. 在运行环境允许时，把文本自动粘贴回当前聚焦应用。
+8. 在运行环境允许时，把文本自动粘贴回当前焦点的 App。
 
 备注：
 
-- ASR：可选的本地 `whisper.cpp`，通过 `whisper-cli`
-- ASR：可选的外部 `SenseVoice` FastAPI 服务
-- LLM 校正：默认走 `uniai` 上的 OpenAI 兼容 Chat Completions，也可配置为 Responses API
-- 输出：优先 portal clipboard 和 portal paste，`wl-copy` 与 `ydotool` 作为 fallback
+- LLM 校正：默认支持所有 OpenAI 兼容 Chat Completion API，也可配置为 OpenAI Responses API
+- 输出：优先使用 Gnome portal clipboard 和 portal paste，不可用时，使用 `wl-copy` 与 `ydotool` 作为 fallback
+
+## GNOME 专属的部分：
+
+- 安装脚本会安装 GNOME Shell 扩展，用于获取当前焦点的窗口，通过 D-Bus 暴露当前聚焦窗口的 `wm_class`，Coe 需要用它判断目标 App 是普通 App 还是一个 Terminal App
+- 当 `GlobalShortcuts` 不可用时，Coe 会自动管理 GNOME 自定义快捷键
 
 ## 安装
 
-### 安装依赖
+### 快速安装
 
-运行时依赖：
-
-- Wayland 会话
-- GNOME 桌面
-- `pw-record`
-- `wl-copy`
-- `OPENAI_API_KEY`
-
-你可以把 key 放在 `~/.config/coe/env`，也可以直接写进 `config.yaml` 里的 `asr.api_key` 和 `llm.api_key`。
-
-可选依赖：
-
-- `ydotool`，如果你想试命令行粘贴 fallback
-- `whisper-cli` 和一个 Whisper 模型文件，如果你想用本地 ASR
-- 一个正在运行的 SenseVoice FastAPI 服务，如果你想通过 SenseVoice 做本地网络 ASR
-
-在 Ubuntu 上，可以这样安装命令行依赖：
+最简单的方式是直接用 release 安装脚本：
 
 ```bash
-sudo apt update
-sudo apt install -y pipewire-bin wl-clipboard
+curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe/refs/heads/master/scripts/install.sh
+bash /tmp/install.sh
 ```
 
-可选的粘贴 fallback：
-
-```bash
-sudo apt install -y ydotool
-```
-
-### 下载预编译好的包
-
-[下载](https://github.com/quailyquaily/coe/releases)
-
-### 或者，从源码构建
-
-#### 前置条件
-
-```bash
-git clone https://github.com/quailyquaily/coe.git
-cd coe
-go build -o coe ./cmd/coe
-```
-
-## 运行
-
-```bash
-./coe serve
-```
-
-### 安装为用户 systemd 服务
-
-如果你想把当前 alpha 安装成常驻的用户级服务：
-
-```bash
-./scripts/install.sh
-```
-
-脚本会下载与你机器架构匹配的 GitHub Release tarball，然后安装：
+它会下载与你机器架构匹配的 GitHub Release tarball，然后安装：
 
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
@@ -115,25 +69,36 @@ go build -o coe ./cmd/coe
 - 检查 `coe.service` 是否处于 active
 - 打印二进制、配置、env、systemd unit 和 GNOME 扩展的安装位置
 
-你也可以显式指定版本：
+如果你使用云端 ASR 或 LLM provider，把需要的 API key 填进 `~/.config/coe/env`，或者直接写进 `~/.config/coe/config.yaml`。
+
+安装完成后，先注销再登录一次，让 GNOME Shell 和用户级服务会话都干净地拿到新扩展。
+
+然后打开一个有输入焦点的 App，按下默认快捷键：`<Shift><Super>d`，说话，再按一次，稍等片刻，如果正常的话，会看到说的话变成文字出现在这个 App
+
+### 安装依赖
+
+运行时依赖：
+
+- Wayland
+- GNOME
+- `pw-record`
+- `wl-copy`
+
+在 Ubuntu 上，可以这样安装命令行依赖：
 
 ```bash
-./scripts/install.sh v0.0.4
+sudo apt update
+sudo apt install -y pipewire-bin wl-clipboard
+sudo apt install -y ydotool
 ```
 
-如果你使用云端 ASR 或 LLM provider，把需要的 API key 填进 `~/.config/coe/env`，或者直接写进 `~/.config/coe/config.yaml`。安装完成后，先注销再登录一次，让 GNOME Shell 和用户级服务会话都干净地拿到新扩展。需要的话再重启服务：
+可选依赖：
 
-```bash
-systemctl --user restart coe.service
-```
-
-如果你愿意，也可以把 `~/.config/coe/env` 留空，直接把 key 写进 `~/.config/coe/config.yaml` 的 `asr.api_key` 和 `llm.api_key`。
-
-## 热键开启和关闭听写
-
-- 名称：`coe-trigger`
-- 默认快捷键：`<Shift><Super>d`
-- 在 GNOME fallback 模式下，Coe 会在启动时自动确保一条匹配的自定义快捷键
+- 剪贴板：`ydotool`，安装使用命令 `sudo apt install -y ydotool`
+- LLM：一个 OpenAI 兼容 API 的 LLM 进行文本纠正，把需要的 API key 放在 `~/.config/coe/env` 或者 `config.yaml` 里的 `llm.api_key`
+- ASR：`whisper-cli` 和一个 Whisper 模型文件，如果你想用本地 ASR
+- ASR：一个正在运行的 SenseVoice FastAPI 服务，如果你想通过 SenseVoice 做本地网络 ASR
+- ASR：OpenAI 提供的 transcribe 服务，把需要的 API key 放在 `~/.config/coe/env` 或者 `config.yaml` 里的 `asr.api_key`
 
 ## 配置
 
