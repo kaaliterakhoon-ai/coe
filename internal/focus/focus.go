@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	GNOMEShellFocusService   = "org.quaily.Coe.Focus1"
-	GNOMEShellFocusPath      = "/org/quaily/Coe/Focus1"
-	GNOMEShellFocusInterface = "org.quaily.Coe.Focus1"
-	getFocusedWindowMethod   = GNOMEShellFocusInterface + ".GetFocusedWindow"
+	GNOMEShellFocusService   = "org.gnome.Shell"
+	GNOMEShellFocusPath      = "/org/gnome/Shell/Extensions/FocusWmClass"
+	GNOMEShellFocusInterface = "org.gnome.Shell.Extensions.FocusWmClass"
+	getFocusedWindowMethod   = GNOMEShellFocusInterface + ".Get"
 )
 
 type Target struct {
@@ -76,7 +76,7 @@ func (p *GNOMEShellProvider) Focused(ctx context.Context) (Target, error) {
 	}
 
 	var target Target
-	if err := p.obj.CallWithContext(ctx, getFocusedWindowMethod, 0).Store(&target.AppID, &target.WMClass, &target.Title); err != nil {
+	if err := p.obj.CallWithContext(ctx, getFocusedWindowMethod, 0).Store(&target.WMClass); err != nil {
 		return Target{}, err
 	}
 	return target, nil

@@ -1,6 +1,6 @@
 # GNOME Focus Helper
 
-Coe can choose a different paste shortcut when the focused target is a terminal-like app. On GNOME, the clean way to do that is a small GNOME Shell extension that exposes the focused window over D-Bus.
+Coe can choose a different paste shortcut when the focused target is a terminal-like app. On GNOME, the clean way to do that is a small GNOME Shell extension that exposes the focused window `wm_class` over D-Bus.
 
 This is GNOME-only. It is not a cross-desktop interface.
 
@@ -14,49 +14,52 @@ Wayland and the portal APIs let Coe inject a paste shortcut. They do not tell Co
 
 Service:
 
-- `org.quaily.Coe.Focus1`
+- `org.gnome.Shell`
 
 Path:
 
-- `/org/quaily/Coe/Focus1`
+- `/org/gnome/Shell/Extensions/FocusWmClass`
 
 Interface:
 
-- `org.quaily.Coe.Focus1`
+- `org.gnome.Shell.Extensions.FocusWmClass`
 
 Method:
 
-- `GetFocusedWindow() -> (app_id, wm_class, title)`
+- `Get() -> (wm_class)`
 
 Return values:
 
-- `app_id`
-  GTK app id or sandboxed app id when available.
 - `wm_class`
-  WM class as a fallback for apps that do not expose an app id.
-- `title`
-  Current focused window title.
+  WM class of the currently focused window.
 
-The Go side treats empty strings as "unknown" and falls back to the default paste shortcut.
+The Go side treats an empty string as "unknown" and falls back to the default paste shortcut.
+
+Example probe:
+
+```bash
+gdbus call --session \
+  --dest org.gnome.Shell \
+  --object-path /org/gnome/Shell/Extensions/FocusWmClass \
+  --method org.gnome.Shell.Extensions.FocusWmClass.Get
+```
 
 ## Shell Side
 
 The extension should read the current focus from Mutter / GNOME Shell:
 
-- `global.display.get_focus_window()`
-- `window.get_gtk_application_id()`
-- `window.get_sandboxed_app_id()`
+- `global.display.focus_window`
 - `window.get_wm_class()`
-- `window.get_title()`
+- `notify::focus-window`
 
-The extension only needs to answer the focused-window query. It does not need to inject input itself.
+The extension caches the current `wm_class` in memory and only answers the focused-window query. It does not inject input itself.
 
 ## Coe Side
 
 When `output.use_gnome_focus_helper: true`:
 
 1. Coe connects to the session bus.
-2. Coe calls `GetFocusedWindow()` before auto-paste.
+2. Coe calls `Get()` before auto-paste.
 3. Coe classifies the target.
 4. If the target looks terminal-like, Coe uses `output.terminal_paste_shortcut`.
 5. Otherwise Coe uses `output.paste_shortcut`.

@@ -106,7 +106,7 @@ go build -o coe ./cmd/coe
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
 - `~/.config/coe/env`
-- `~/.local/share/gnome-shell/extensions/coe-focus-helper@quaily.com`
+- `~/.local/share/gnome-shell/extensions/coe-focus-helper@mistermorph.com`
 
 然后把你的 OpenAI key 填进 `~/.config/coe/env`，再重启服务：
 

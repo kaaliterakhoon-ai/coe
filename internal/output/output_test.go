@@ -312,6 +312,37 @@ func TestDeliverUsesTerminalPasteShortcutForFocusedTerminal(t *testing.T) {
 	}
 }
 
+func TestLooksLikeTerminalTarget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target focus.Target
+		want   bool
+	}{
+		{name: "gnome terminal", target: focus.Target{WMClass: "gnome-terminal-server"}, want: true},
+		{name: "konsole", target: focus.Target{WMClass: "konsole"}, want: true},
+		{name: "xfce4 terminal", target: focus.Target{WMClass: "xfce4-terminal"}, want: true},
+		{name: "tilix", target: focus.Target{WMClass: "Tilix"}, want: true},
+		{name: "warp", target: focus.Target{WMClass: "WarpTerminal"}, want: true},
+		{name: "rio", target: focus.Target{WMClass: "rio"}, want: true},
+		{name: "tabby", target: focus.Target{WMClass: "tabby"}, want: true},
+		{name: "hyper", target: focus.Target{WMClass: "Hyper"}, want: true},
+		{name: "ordinary editor", target: focus.Target{WMClass: "gedit"}, want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := looksLikeTerminalTarget(tt.target); got != tt.want {
+				t.Fatalf("looksLikeTerminalTarget(%+v) = %v, want %v", tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEnsurePortalLoadsAndSavesRestoreToken(t *testing.T) {
 	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
 	if err := store.Save(state.PortalAccess{RemoteDesktopRestoreToken: "old-token"}); err != nil {

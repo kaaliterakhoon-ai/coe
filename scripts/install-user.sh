@@ -10,7 +10,7 @@ SYSTEMD_DIR="${HOME}/.config/systemd/user"
 UNIT_PATH="${SYSTEMD_DIR}/coe.service"
 ENV_PATH="${CONFIG_DIR}/env"
 GNOME_EXTENSIONS_DIR="${HOME}/.local/share/gnome-shell/extensions"
-GNOME_FOCUS_HELPER_UUID="coe-focus-helper@quaily.com"
+GNOME_FOCUS_HELPER_UUID="coe-focus-helper@mistermorph.com"
 GNOME_FOCUS_HELPER_SRC="${REPO_ROOT}/packaging/gnome-shell-extension/${GNOME_FOCUS_HELPER_UUID}"
 GNOME_FOCUS_HELPER_DST="${GNOME_EXTENSIONS_DIR}/${GNOME_FOCUS_HELPER_UUID}"
 

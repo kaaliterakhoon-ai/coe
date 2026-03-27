@@ -85,7 +85,7 @@ If startup cannot write GNOME shortcut settings, Coe logs a startup warning and 
 
 The install script also copies the Coe GNOME Shell extension to:
 
-- `~/.local/share/gnome-shell/extensions/coe-focus-helper@quaily.com`
+- `~/.local/share/gnome-shell/extensions/coe-focus-helper@mistermorph.com`
 
 If `gnome-extensions` is available, the script will try to enable it. New configs enable focus-aware paste by default. If you already had a config file before this change, make sure it contains:
 

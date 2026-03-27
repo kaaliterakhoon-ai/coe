@@ -112,7 +112,7 @@ go build -o coe ./cmd/coe
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
 - `~/.config/coe/env`
-- `~/.local/share/gnome-shell/extensions/coe-focus-helper@quaily.com`
+- `~/.local/share/gnome-shell/extensions/coe-focus-helper@mistermorph.com`
 
 そのあと `~/.config/coe/env` に OpenAI キーを書き、サービスを再起動します。
 

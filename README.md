@@ -106,7 +106,7 @@ The script installs:
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
 - `~/.config/coe/env`
-- `~/.local/share/gnome-shell/extensions/coe-focus-helper@quaily.com`
+- `~/.local/share/gnome-shell/extensions/coe-focus-helper@mistermorph.com`
 
 Then put your OpenAI key into `~/.config/coe/env` and restart the service:
 
