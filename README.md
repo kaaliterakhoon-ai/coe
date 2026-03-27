@@ -238,6 +238,7 @@ If you want to use the OpenAI Responses API instead, set `llm.endpoint_type` to 
 
 - `log_level: info`
 - set `log_level: debug` to print per-stage timings and output fallback details
+- set `runtime.mode: fcitx` when you want the Fcitx5 module to drive dictation instead of the GNOME fallback shortcut
 - or override it for one run: `coe serve --log-level debug`
 
 For GNOME focus-aware paste, see:

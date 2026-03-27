@@ -238,6 +238,7 @@ OpenAI Responses API を使いたい場合は、`llm.endpoint_type` を `respons
 
 - `log_level: info`
 - `log_level: debug` にすると各段階の所要時間や output fallback の詳細を出します
+- Fcitx5 モジュール側で dictation を駆動したい場合は、`runtime.mode` を `fcitx` に設定してください
 - 1 回だけ上書きするなら `coe serve --log-level debug`
 
 GNOME focus-aware paste については次を参照してください。
