@@ -18,6 +18,7 @@
 #include <fcitx/event.h>
 #include <fcitx/inputcontext.h>
 #include <fcitx/inputpanel.h>
+#include <fcitx-utils/event.h>
 #include <fcitx-utils/eventdispatcher.h>
 #include <fcitx/instance.h>
 #include <fcitx-utils/key.h>
@@ -57,6 +58,13 @@ std::string trim(std::string value) {
     while (!value.empty() &&
            std::isspace(static_cast<unsigned char>(value.back()))) {
         value.pop_back();
+    }
+    return value;
+}
+
+std::string toLower(std::string value) {
+    for (auto &ch : value) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     }
     return value;
 }
@@ -161,12 +169,52 @@ std::string acceleratorToFcitxKeyString(const std::string &value) {
 
 std::string panelTextForState(const std::string &state) {
     if (state == "recording") {
-        return "Coe: Listening...";
+        return "●";
     }
     if (state == "processing") {
-        return "Coe: Processing...";
+        return "◐";
     }
     return "";
+}
+
+bool shouldSuppressErrorPanel(const std::string &message) {
+    const auto lowered = toLower(trim(message));
+    if (lowered.empty()) {
+        return true;
+    }
+    const std::vector<std::string> ignoredSubstrings = {
+        "near-silent",
+        "no speech",
+        "returned empty text",
+        "produced no text",
+        "saturated or corrupted",
+    };
+    for (const auto &needle : ignoredSubstrings) {
+        if (lowered.find(needle) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string shortErrorLabel(const std::string &message) {
+    const auto lowered = toLower(message);
+    const std::vector<std::pair<std::string, std::string>> mappings = {
+        {"recording start failed", "× Mic"},
+        {"recording stop failed", "× Mic"},
+        {"transcription failed", "× ASR"},
+        {"asr", "× ASR"},
+        {"correction", "× LLM"},
+        {"cleanup", "× LLM"},
+        {"dbus", "× D-Bus"},
+        {"not ready", "× Not ready"},
+    };
+    for (const auto &[needle, label] : mappings) {
+        if (lowered.find(needle) != std::string::npos) {
+            return label;
+        }
+    }
+    return "× Failed";
 }
 
 class CoeModule final : public fcitx::AddonInstance {
@@ -427,34 +475,143 @@ private:
             FCITX_WARN() << "coe-fcitx: daemon error for session "
                          << (sessionID ? sessionID : "") << ": "
                          << (errorText ? errorText : "");
+            auto errorValue = std::string(errorText ? errorText : "");
+            appendDebugMarker("error " + errorValue);
+            dispatcher_.schedule([this, errorValue]() {
+                this->showErrorPanel(errorValue);
+            });
         }
     }
 
     void updatePanelState(const std::string &state, const std::string &) {
+        if (state == "recording") {
+            startPanelAnimation("recording");
+            return;
+        }
+        if (state == "processing") {
+            startPanelAnimation("processing");
+            return;
+        }
+        stopPanelAnimation();
+        clearPanel();
+        appendDebugMarker("panel clear state=" + state);
+    }
+
+    void startPanelAnimation(const std::string &state) {
+        animatedPanelState_ = state;
+        panelFrame_ = 0;
+        cancelClearPanel();
+        renderAnimatedPanelFrame();
+        ensureAnimationTimer();
+    }
+
+    void stopPanelAnimation() {
+        animatedPanelState_.clear();
+        panelFrame_ = 0;
+        if (animationTimer_) {
+            animationTimer_->setEnabled(false);
+        }
+    }
+
+    void ensureAnimationTimer() {
+        const uint64_t intervalUsec = 350000;
+        if (!animationTimer_) {
+            animationTimer_ = instance_->eventLoop().addTimeEvent(
+                CLOCK_MONOTONIC, fcitx::now(CLOCK_MONOTONIC) + intervalUsec,
+                50000,
+                [this](fcitx::EventSourceTime *event, uint64_t) {
+                    if (animatedPanelState_.empty()) {
+                        return false;
+                    }
+                    renderAnimatedPanelFrame();
+                    event->setNextInterval(intervalUsec);
+                    return true;
+                });
+        }
+        animationTimer_->setEnabled(true);
+    }
+
+    void cancelClearPanel() {
+        if (clearTimer_) {
+            clearTimer_->setEnabled(false);
+        }
+    }
+
+    void scheduleClearPanel(uint64_t delayUsec) {
+        cancelClearPanel();
+        if (!clearTimer_) {
+            clearTimer_ = instance_->eventLoop().addTimeEvent(
+                CLOCK_MONOTONIC, fcitx::now(CLOCK_MONOTONIC) + delayUsec,
+                50000,
+                [this](fcitx::EventSourceTime *, uint64_t) {
+                    clearPanel();
+                    return false;
+                });
+        } else {
+            clearTimer_->setTime(fcitx::now(CLOCK_MONOTONIC) + delayUsec);
+            clearTimer_->setEnabled(true);
+        }
+    }
+
+    void renderAnimatedPanelFrame() {
+        const auto text = currentAnimatedPanelText();
+        if (text.empty()) {
+            clearPanel();
+            return;
+        }
+        showPanel(text);
+        panelFrame_++;
+    }
+
+    std::string currentAnimatedPanelText() const {
+        if (animatedPanelState_ == "recording") {
+            return (panelFrame_ % 2 == 0) ? "●" : "○";
+        }
+        if (animatedPanelState_ == "processing") {
+            static const std::vector<std::string> frames = {"◐", "◓", "◑", "◒"};
+            return frames[panelFrame_ % frames.size()];
+        }
+        return "";
+    }
+
+    void showErrorPanel(const std::string &message) {
+        stopPanelAnimation();
+        if (shouldSuppressErrorPanel(message)) {
+            clearPanel();
+            appendDebugMarker("panel suppress error");
+            return;
+        }
+        const auto label = shortErrorLabel(message);
+        showPanel(label);
+        scheduleClearPanel(1500000);
+        appendDebugMarker("panel error text=" + label);
+    }
+
+    void showPanel(const std::string &text) {
         auto *inputContext = instance_->lastFocusedInputContext();
         if (!inputContext || !inputContext->hasFocus()) {
-            appendDebugMarker("panel skipped no-focused-input-context state=" +
-                              state);
+            appendDebugMarker("panel skipped no-focused-input-context");
             return;
         }
 
         fcitx::Text auxText;
-        const auto text = panelTextForState(state);
-        if (!text.empty()) {
-            auxText.append(text);
-        }
+        auxText.append(text);
         inputContext->inputPanel().setAuxUp(auxText);
         inputContext->updateUserInterface(
             fcitx::UserInterfaceComponent::InputPanel, true);
+        FCITX_DEBUG() << "coe-fcitx: panel text " << text;
+    }
 
-        if (text.empty()) {
-            FCITX_DEBUG() << "coe-fcitx: cleared panel state";
-            appendDebugMarker("panel clear state=" + state);
+    void clearPanel() {
+        cancelClearPanel();
+        auto *inputContext = instance_->lastFocusedInputContext();
+        if (!inputContext || !inputContext->hasFocus()) {
             return;
         }
-
-        FCITX_DEBUG() << "coe-fcitx: panel state " << text;
-        appendDebugMarker("panel show state=" + state + " text=" + text);
+        fcitx::Text auxText;
+        inputContext->inputPanel().setAuxUp(auxText);
+        inputContext->updateUserInterface(
+            fcitx::UserInterfaceComponent::InputPanel, true);
     }
 
     void commitResult(const std::string &text) {
@@ -550,8 +707,12 @@ private:
     DBusConnection *callBus_ = nullptr;
     DBusConnection *signalBus_ = nullptr;
     std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> keyWatcher_;
+    std::unique_ptr<fcitx::EventSourceTime> animationTimer_;
+    std::unique_ptr<fcitx::EventSourceTime> clearTimer_;
     std::thread signalThread_;
     std::atomic<bool> running_ = false;
+    std::string animatedPanelState_;
+    size_t panelFrame_ = 0;
 };
 
 class CoeModuleFactory final : public fcitx::AddonFactory {
