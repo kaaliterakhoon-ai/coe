@@ -1,5 +1,10 @@
 # Runtime behavior.
 runtime:
+  # Runtime mode.
+  # `desktop` keeps the current GNOME-first desktop flow.
+  # `fcitx` disables the GNOME fallback shortcut path and expects the Fcitx5 module
+  # to drive dictation over D-Bus instead.
+  mode: desktop
   # Target desktop profile. Today this project is GNOME-first.
   target_desktop: gnome
   # Log verbosity: debug, info, warn, error.
@@ -140,6 +145,11 @@ notifications:
 #
 # Example focus-aware paste on GNOME:
 #
+# runtime:
+#   mode: desktop
+#   target_desktop: gnome
+#   log_level: info
+#
 # output:
 #   preferred_clipboard_mode: portal
 #   enable_auto_paste: true
@@ -160,3 +170,13 @@ notifications:
 #   api_key: ""
 #   api_key_env: ""
 #   prompt: ""
+#
+# Example Fcitx5 module mode:
+#
+# runtime:
+#   mode: fcitx
+#   target_desktop: gnome
+#   log_level: info
+#
+# The Fcitx5 module reads this same hotkey over D-Bus and converts it
+# internally to Fcitx key syntax.

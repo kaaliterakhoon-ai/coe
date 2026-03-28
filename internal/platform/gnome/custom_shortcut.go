@@ -69,6 +69,62 @@ func (m ShortcutManager) EnsureTriggerShortcut(ctx context.Context, name, bindin
 	return m.ensure(ctx, shortcut)
 }
 
+func (m ShortcutManager) RemoveTriggerShortcut(ctx context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = defaultShortcutName
+	}
+
+	paths, err := m.listShortcutPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	filtered := make([]string, 0, len(paths))
+	changed := false
+	for _, path := range paths {
+		entry, err := m.readShortcut(ctx, path)
+		if err != nil {
+			return err
+		}
+		if matchesManagedShortcut(entry, name) {
+			changed = true
+			continue
+		}
+		filtered = append(filtered, path)
+	}
+
+	if !changed {
+		return nil
+	}
+
+	return m.setShortcutPaths(ctx, filtered)
+}
+
+func (m ShortcutManager) LookupTriggerShortcut(ctx context.Context, name string) (Shortcut, bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = defaultShortcutName
+	}
+
+	paths, err := m.listShortcutPaths(ctx)
+	if err != nil {
+		return Shortcut{}, false, err
+	}
+
+	for _, path := range paths {
+		entry, err := m.readShortcut(ctx, path)
+		if err != nil {
+			return Shortcut{}, false, err
+		}
+		if matchesManagedShortcut(entry, name) {
+			return entry, true, nil
+		}
+	}
+
+	return Shortcut{}, false, nil
+}
+
 func (m ShortcutManager) ensure(ctx context.Context, shortcut Shortcut) error {
 	if strings.TrimSpace(shortcut.Binding) == "" {
 		return fmt.Errorf("GNOME custom shortcut requires a binding")
@@ -180,7 +236,17 @@ func matchesShortcut(existing, wanted Shortcut) bool {
 	if existing.Command == wanted.Command {
 		return true
 	}
-	if existing.Name == wanted.Name {
+	return matchesManagedShortcut(existing, wanted.Name)
+}
+
+func matchesManagedShortcut(existing Shortcut, name string) bool {
+	if strings.TrimSpace(name) == "" {
+		name = defaultShortcutName
+	}
+	if existing.Name == name {
+		return true
+	}
+	if strings.Contains(existing.Command, "coe trigger toggle") {
 		return true
 	}
 	if strings.Contains(existing.Command, defaultShortcutLabel) && strings.Contains(existing.Command, "coe") {

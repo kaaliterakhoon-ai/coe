@@ -4,11 +4,17 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 const envConfigPath = "COE_CONFIG"
+
+const (
+	RuntimeModeDesktop = "desktop"
+	RuntimeModeFcitx   = "fcitx"
+)
 
 type Config struct {
 	Runtime       RuntimeConfig       `yaml:"runtime"`
@@ -21,6 +27,7 @@ type Config struct {
 }
 
 type RuntimeConfig struct {
+	Mode          string `yaml:"mode"`
 	TargetDesktop string `yaml:"target_desktop"`
 	LogLevel      string `yaml:"log_level"`
 }
@@ -82,6 +89,7 @@ type NotificationsConfig struct {
 func Default() Config {
 	return Config{
 		Runtime: RuntimeConfig{
+			Mode:          RuntimeModeDesktop,
 			TargetDesktop: "gnome",
 			LogLevel:      "info",
 		},
@@ -167,8 +175,29 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err
 	}
+	cfg.Runtime.Mode = NormalizeRuntimeMode(cfg.Runtime.Mode)
+	if !IsSupportedRuntimeMode(cfg.Runtime.Mode) {
+		return Config{}, errors.New("unsupported runtime.mode: " + cfg.Runtime.Mode)
+	}
 
 	return cfg, nil
+}
+
+func NormalizeRuntimeMode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return RuntimeModeDesktop
+	}
+	return value
+}
+
+func IsSupportedRuntimeMode(value string) bool {
+	switch NormalizeRuntimeMode(value) {
+	case RuntimeModeDesktop, RuntimeModeFcitx:
+		return true
+	default:
+		return false
+	}
 }
 
 func WriteDefault(path string, overwrite bool) (bool, error) {
@@ -194,4 +223,31 @@ func WriteDefault(path string, overwrite bool) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func Save(path string, cfg Config) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+func SetValue(cfg *Config, key, value string) error {
+	switch strings.TrimSpace(key) {
+	case "runtime.mode":
+		normalized := NormalizeRuntimeMode(value)
+		if !IsSupportedRuntimeMode(normalized) {
+			return errors.New("unsupported runtime.mode: " + value)
+		}
+		cfg.Runtime.Mode = normalized
+		return nil
+	default:
+		return errors.New("unsupported config key: " + key)
+	}
 }

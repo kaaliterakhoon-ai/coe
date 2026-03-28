@@ -78,6 +78,33 @@ func TestNextShortcutPathUsesFirstGap(t *testing.T) {
 	}
 }
 
+func TestRemoveTriggerShortcutRemovesManagedBindingOnly(t *testing.T) {
+	t.Parallel()
+
+	coePath := customBindingBase + "custom0/"
+	otherPath := customBindingBase + "custom1/"
+	runner := &fakeRunner{
+		values: map[string]string{
+			joinKey("gsettings", "get", mediaKeysSchema, "custom-keybindings"): fmt.Sprintf("['%s', '%s']", coePath, otherPath),
+			joinKey("gsettings", "get", schemaForPath(coePath), "name"):        "'coe-trigger'",
+			joinKey("gsettings", "get", schemaForPath(coePath), "command"):     "'/home/test/.local/bin/coe trigger toggle'",
+			joinKey("gsettings", "get", schemaForPath(coePath), "binding"):     "'<Shift><Super>d'",
+			joinKey("gsettings", "get", schemaForPath(otherPath), "name"):      "'other-shortcut'",
+			joinKey("gsettings", "get", schemaForPath(otherPath), "command"):   "'/usr/bin/echo hello'",
+			joinKey("gsettings", "get", schemaForPath(otherPath), "binding"):   "'<Ctrl><Alt>t'",
+		},
+	}
+	manager := ShortcutManager{runner: runner}
+
+	if err := manager.RemoveTriggerShortcut(context.Background(), "coe-trigger"); err != nil {
+		t.Fatalf("RemoveTriggerShortcut() error = %v", err)
+	}
+
+	if got := runner.values[joinKey("gsettings", "set", mediaKeysSchema, "custom-keybindings", "['"+otherPath+"']")]; got != "ok" {
+		t.Fatalf("expected updated custom shortcut list, got %q", got)
+	}
+}
+
 type fakeRunner struct {
 	values map[string]string
 	calls  [][]string

@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
 
 func TestParseServeOptions(t *testing.T) {
 	t.Parallel()
@@ -52,5 +56,32 @@ func TestParseServeOptions(t *testing.T) {
 				t.Fatalf("parseServeOptions().LogLevel = %q, want %q", got.LogLevel, tt.want)
 			}
 		})
+	}
+}
+
+func TestPrintDoctorChecksUsesEnglishSummaryAndStatuses(t *testing.T) {
+	t.Parallel()
+
+	checks := []doctorCheck{
+		{Name: "Config file", OK: true, Detail: "path=/tmp/coe/config.yaml"},
+		{Name: "Fcitx module init", OK: false, Detail: "marker=missing", Problem: "module init marker is missing"},
+	}
+
+	var buf bytes.Buffer
+	printDoctorChecks(&buf, checks)
+	output := buf.String()
+
+	for _, want := range []string{
+		"Config file",
+		"Fcitx module init",
+		"OK",
+		"FAIL",
+		"Summary: issues found.",
+		"- module init marker is missing",
+		"\n      path=/tmp/coe/config.yaml",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("printDoctorChecks() missing %q in:\n%s", want, output)
+		}
 	}
 }

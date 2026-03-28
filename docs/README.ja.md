@@ -2,11 +2,9 @@
 
 [English](../README.md) | [简体中文](./README.zh-CN.md)
 
-Coe は Linux 上で GNOME on Wayland 向けに動く音声入力ツールです。
+Coe は Linux デスクトップ向けの音声入力ツールです。
 
 これは [`missuo/koe`](https://github.com/missuo/koe) への Linux 向けオマージュです。目標は変わりません。ホットキーを押し、話し、LLM に文字起こしを整えさせ、そのテキストを今使っているアプリに戻します。
-
-> 現時点で唯一しっかり磨かれている対象は GNOME on Wayland です。他の Linux デスクトップや X11 セッションでも一部は動くかもしれません。試してみるのは歓迎です。
 
 ## 名前
 
@@ -18,7 +16,7 @@ Coe は Linux 上で GNOME on Wayland 向けに動く音声入力ツールです
 
 - バックグラウンドで動かし、UI 面をできるだけ小さくする
 - 設定はプレーンな YAML
-- portal clipboard、portal paste、デスクトップ通知のような既存機能を優先的に使う
+- fcitx、portal clipboard など、すでにある力を先に使う
 - 制約の中でも、できるだけちゃんと音声入力を成立させる
 
 ## 仕組み
@@ -26,18 +24,34 @@ Coe は Linux 上で GNOME on Wayland 向けに動く音声入力ツールです
 実行フローは次の通りです。
 
 1. 通常は user-level `systemd` 経由で、`coe serve` をバックグラウンドで動かし続けます。
-2. `coe trigger toggle` でディクテーションを開始します。現在は GNOME のカスタムショートカットから呼ばれます。他の DE でも理屈の上では同じコマンドをホットキーに割り当てられます。
+2. ホットキーでディクテーションを開始します。
+   `runtime.mode: fcitx` では、Fcitx5 モジュールが D-Bus 経由で Coe を呼び、最終テキストを現在の input context に `CommitString` します。
+   `runtime.mode: desktop` では、GNOME が custom keyboard shortcut で `coe trigger toggle` を呼びます。
 3. `pw-record` でマイク入力を録音します。
 4. ほぼ無音または明らかに壊れた録音は送らずに止めます。
 5. 音声を ASR に送ります。OpenAI、SenseVoice、ローカル `whisper.cpp` に対応します。
 6. 必要なら、転写結果を OpenAI 互換のテキストモデルへ送り、整形します。
-7. 整形したテキストをクリップボード経由で書き戻します。
-8. 実行環境が許す場合、フォーカス中のアプリへそのまま貼り付けます。
+7. 最終テキストを画面に出します。Fcitx 経由でそのまま入力するか、フォーカス中のアプリへ貼り付けます。
 
 補足:
 
 - LLM 整形: デフォルトでは OpenAI 互換 Chat Completions API を使い、必要なら OpenAI Responses API にも切り替え可能です
-- 出力: まず GNOME portal clipboard と portal paste を使い、無理なら `wl-copy` と `ydotool` に落とします
+- 出力: `desktop` モードではまず GNOME portal clipboard を使い、無理なら `wl-copy` と `ydotool` に落とします
+
+## デスクトップ統合の経路
+
+現時点では二つの経路があります。
+
+- `runtime.mode: fcitx`
+  - 薄い Fcitx5 モジュール
+  - ホットキーは Fcitx 内で処理
+  - 最終テキストは `CommitString` でそのまま入力
+  - 録音中と処理中だけ Fcitx パネルに小さな状態表示
+- `runtime.mode: desktop`
+  - GNOME-first のデスクトップ経路
+  - `GlobalShortcuts` がない場合は GNOME custom shortcut fallback
+  - portal clipboard / paste
+  - terminal-aware paste のための GNOME Shell extension
 
 ## GNOME 専用の部分
 
@@ -65,32 +79,40 @@ curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe
 bash /tmp/install.sh
 ```
 
-これは、マシンのアーキテクチャに合った GitHub Release tarball をダウンロードしてから、次を入れます。
+これは、マシンのアーキテクチャに合った GitHub Release tarball をダウンロードします。`fcitx5` が入っていれば `fcitx` モードを優先し、なければ `desktop` モードに自動でフォールバックします。`--fcitx` で `fcitx` を強制でき、`--gnome` で `desktop` を強制できます。
+
+その後、次を入れます。
 
 - `~/.local/bin/coe`
 - `~/.config/systemd/user/coe.service`
 - `~/.config/coe/env`
-- `~/.local/share/gnome-shell/extensions/coe-focus-helper@mistermorph.com`
+- `fcitx5` があれば Fcitx5 モジュール
+- `desktop` パスを使う場合だけ GNOME Shell 拡張
 
 その後さらに:
 
 - `coe doctor` を実行
 - `coe.service` を再起動
 - `coe.service` が active か確認
-- バイナリ、設定、env、systemd unit、GNOME 拡張のインストール先を表示
+- バイナリ、設定、env、systemd unit、デスクトップ固有アセットのインストール先を表示
 
 クラウド ASR や LLM provider を使う場合は、必要な API キーを `~/.config/coe/env` に書くか、`~/.config/coe/config.yaml` に直接書いてください。
 
-インストール後は一度ログアウトして再ログインしてください。GNOME Shell とユーザーサービスセッションの両方が新しい拡張をきれいに読み直せます。
+`fcitx` モードを使う場合は、Fcitx パネルにも録音中と処理中の短い Coe 状態表示が出ます。
+
+現在のパスが `desktop` なら、インストール後に一度ログアウトして再ログインしてください。GNOME Shell とユーザーサービスセッションの両方が新しい拡張をきれいに読み直せます。
 
 そのあと入力欄のあるアプリを開き、デフォルトショートカット `<Shift><Super>d` を押して話し、もう一度押してください。うまくいけば、そのアプリに話した内容がテキストとして入ります。
 
 ### 依存のインストール
 
-実行時に必要なもの:
+**`fcitx5` モード**
 
-- Wayland セッション
-- GNOME デスクトップ
+- `fcitx5`
+- `pw-record`
+
+**`desktop` モード**
+
 - `pw-record`
 - `wl-copy`
 
@@ -109,12 +131,6 @@ sudo apt update
 sudo apt install -y pipewire-bin wl-clipboard
 sudo apt install -y ydotool
 ```
-
-## ディクテーション開始・終了用ホットキー
-
-- 名前: `coe-trigger`
-- デフォルトショートカット: `<Shift><Super>d`
-- GNOME fallback では、Coe が起動時に対応するカスタムショートカットを自動で揃えます
 
 ## 設定
 
@@ -147,6 +163,10 @@ cp config.example.yaml ~/.config/coe/config.yaml
 ```
 
 現在のデフォルトは次の通りです。
+
+### ホットキー
+
+- デフォルトトリガーキー: `<Shift><Super>d`
 
 ### ASR
 
@@ -208,7 +228,7 @@ asr:
 - provider: `openai`
 - endpoint type: `chat`
 - endpoint: `https://api.openai.com/v1`
-- model: `gpt-4o-mini`
+- model: `gpt-5.4-nano`
 - 直接キーを書くフィールド: `llm.api_key`
 - 環境変数フィールド: `OPENAI_API_KEY`
 
@@ -238,6 +258,7 @@ OpenAI Responses API を使いたい場合は、`llm.endpoint_type` を `respons
 
 - `log_level: info`
 - `log_level: debug` にすると各段階の所要時間や output fallback の詳細を出します
+- Fcitx5 モジュール側で trigger path を引き受けたい場合は、`runtime.mode` を `fcitx` に設定してください
 - 1 回だけ上書きするなら `coe serve --log-level debug`
 
 GNOME focus-aware paste については次を参照してください。
@@ -251,6 +272,7 @@ GNOME focus-aware paste については次を参照してください。
 
 動いているもの:
 
+- [x] fcitx 5 モジュールによる他デスクトップ環境への互換
 - [x] 自動管理される GNOME カスタムショートカットから `coe trigger toggle` を実行する GNOME Wayland fallback trigger
 - [x] `pw-record` によるマイク録音
 - [x] OpenAI Audio Transcriptions によるバッチ転写
@@ -264,8 +286,6 @@ GNOME focus-aware paste については次を参照してください。
 
 まだないもの:
 
-- [ ] `GlobalShortcuts` portal 対応
-- [ ] KDE / Hyprland での検証
 - [ ] 上流のマイク / PipeWire 飽和問題に対する強い結論
 
 ## その他
@@ -284,14 +304,14 @@ Portal 権限の持続:
 
 ## コマンド
 
-- `go run ./cmd/coe doctor`
-- `go run ./cmd/coe config init`
-- `go run ./cmd/coe serve`
-- `go run ./cmd/coe trigger toggle`
-- `go run ./cmd/coe trigger start`
-- `go run ./cmd/coe trigger stop`
-- `go run ./cmd/coe trigger status`
-- `go run ./cmd/coe version`
+- `coe doctor`
+- `coe config init`
+- `coe serve`
+- `coe trigger toggle`
+- `coe trigger start`
+- `coe trigger stop`
+- `coe trigger status`
+- `coe version`
 
 ## ドキュメント
 

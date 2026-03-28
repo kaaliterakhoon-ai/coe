@@ -38,7 +38,7 @@ func (a *App) notificationForStart() notify.Message {
 	}
 }
 
-func (a *App) notificationForProcessing(result pipeline.Result) notify.Message {
+func (a *App) notificationForProcessing(result pipeline.Result, source string) notify.Message {
 	if result.Transcript == "" {
 		return notify.Message{
 			Title:   "No speech detected",
@@ -49,7 +49,9 @@ func (a *App) notificationForProcessing(result pipeline.Result) notify.Message {
 	}
 
 	status := "Text copied to the clipboard."
-	if result.Output.PasteExecuted {
+	if source == "fcitx-module" {
+		status = "Text sent back through Fcitx."
+	} else if result.Output.PasteExecuted {
 		status = "Text copied and pasted into the focused app."
 	} else if result.Output.ClipboardWritten {
 		status = "Text copied to the clipboard."

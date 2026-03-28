@@ -1,6 +1,7 @@
 package capabilities
 
 import (
+	"strings"
 	"testing"
 
 	"coe/internal/platform/portal"
@@ -29,5 +30,42 @@ func TestSelectProfileFull(t *testing.T) {
 
 	if got := selectProfile(caps); got != ProfileGNOMEFull {
 		t.Fatalf("selectProfile() = %q, want %q", got, ProfileGNOMEFull)
+	}
+}
+
+func TestReportIncludesFcitxStatus(t *testing.T) {
+	t.Parallel()
+
+	caps := Capabilities{
+		Profile:     ProfileExternalTrigger,
+		SessionType: "wayland",
+		Desktop:     "gnome",
+		DBusSession: true,
+		Fcitx: FcitxStatus{
+			Binary:          Binary{Name: "fcitx5", Path: "/usr/bin/fcitx5", Found: true},
+			Running:         true,
+			AddonConfigPath: "/usr/share/fcitx5/addon/coe.conf",
+			ModulePath:      "/usr/lib/x86_64-linux-gnu/fcitx5/libcoefcitx.so",
+			LogPath:         "/tmp/coe-fcitx-1000.log",
+			LogPresent:      true,
+			InitOK:          true,
+		},
+		Hotkey:    FeaturePlan{Mode: ModeExternalBinding, Detail: "GNOME custom shortcut -> `coe trigger toggle`"},
+		Audio:     FeaturePlan{Mode: ModeCommand, Detail: "/usr/bin/pw-record"},
+		Clipboard: FeaturePlan{Mode: ModePortal, Detail: "org.freedesktop.portal.Clipboard v1"},
+		Paste:     FeaturePlan{Mode: ModePortal, Detail: "org.freedesktop.portal.RemoteDesktop v2"},
+	}
+
+	report := caps.Report()
+	for _, want := range []string{
+		"fcitx5: true (/usr/bin/fcitx5)",
+		"fcitx running: true",
+		"fcitx addon config: /usr/share/fcitx5/addon/coe.conf",
+		"fcitx module library: /usr/lib/x86_64-linux-gnu/fcitx5/libcoefcitx.so",
+		"fcitx init marker: true (/tmp/coe-fcitx-1000.log)",
+	} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("Report() missing %q in:\n%s", want, report)
+		}
 	}
 }
