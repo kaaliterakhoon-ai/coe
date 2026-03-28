@@ -6,15 +6,16 @@ Current scope:
 
 - registers as a Fcitx5 module
 - watches key events in `PostInputMethod`
-- matches the hard-coded trigger `<Shift><Super>d`
+- reads the trigger key from Coe over session D-Bus
+- falls back to `Shift+Super+D` if Coe is unavailable during module init
 - calls `com.mistermorph.Coe.Dictation1.Toggle()` over session D-Bus
-- subscribes to `ResultReady` / `ErrorRaised` over session D-Bus
+- subscribes to `StateChanged` / `ResultReady` / `ErrorRaised` over session D-Bus
 - dispatches the result back to the Fcitx main event loop
+- shows a small Fcitx panel hint while Coe is listening or processing
 - commits the final text to the current focused input context
 
 It does not do these things yet:
 
-- configurable hotkeys
 - clipboard fallback
 - polished runtime installation / reload flow
 
@@ -51,6 +52,23 @@ This places files under:
 - `~/.local/share/fcitx5/addon/coe.conf`
 
 This path is convenient for iteration, but it may not be picked up by every distribution build of Fcitx5.
+
+## Hotkey
+
+The module does not keep its own hotkey file. It reads the trigger from Coe
+over D-Bus, so the single source of truth is still:
+
+- `~/.config/coe/config.yaml`
+
+Example:
+
+```yaml
+hotkey:
+  preferred_accelerator: <Shift><Super>d
+```
+
+In `runtime.mode: fcitx`, the module converts that GNOME-style accelerator to
+the Fcitx key format internally.
 
 Set this in `~/.config/coe/config.yaml` before testing the module:
 

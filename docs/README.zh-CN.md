@@ -73,7 +73,7 @@ bash /tmp/install.sh
 
 安装完成后，先注销再登录一次，让 GNOME Shell 和用户级服务会话都干净地拿到新扩展。
 
-然后打开一个有输入焦点的 App，按下默认快捷键：`<Shift><Super>d`，说话，再按一次，稍等片刻，如果正常的话，会看到说的话变成文字出现在这个 App
+然后打开一个有输入焦点的 App，按下默认快捷键：`<Shift><Super>d`，说话，再按一次，稍等片刻，如果正常的话，会看到说的话变成文字出现在这个 App。如果你使用 `runtime.mode: fcitx`，Fcitx panel 还会在录音和处理中显示一条简短的 Coe 状态提示。
 
 ### 安装依赖
 
@@ -131,6 +131,12 @@ cp config.example.yaml ~/.config/coe/config.yaml
 ```
 
 当前默认值如下：
+
+### Fcitx5 模块热键
+
+- 默认触发键：`<Shift><Super>d`
+- `runtime.mode: fcitx` 时，Fcitx5 模块会通过 D-Bus 读取 `~/.config/coe/config.yaml` 里的 `hotkey.preferred_accelerator`
+- 模块内部会把 GNOME 风格的 `<Shift><Super>d` 转成 Fcitx 的按键语法
 
 ### ASR
 

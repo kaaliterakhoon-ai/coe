@@ -11,6 +11,7 @@ type stubHandler struct {
 	startCalls  int
 	stopCalls   int
 	status      Status
+	triggerKey  string
 	err         error
 }
 
@@ -31,6 +32,10 @@ func (h *stubHandler) Stop(context.Context) error {
 
 func (h *stubHandler) Status(context.Context) Status {
 	return h.status
+}
+
+func (h *stubHandler) TriggerKey(context.Context) string {
+	return h.triggerKey
 }
 
 func TestDictationObjectToggleDelegatesToHandler(t *testing.T) {
@@ -70,5 +75,18 @@ func TestDictationObjectStatusReturnsSnapshot(t *testing.T) {
 	}
 	if state != handler.status.State || sessionID != handler.status.SessionID || detail != handler.status.Detail {
 		t.Fatalf("Status() = (%q, %q, %q), want (%q, %q, %q)", state, sessionID, detail, handler.status.State, handler.status.SessionID, handler.status.Detail)
+	}
+}
+
+func TestDictationObjectTriggerKeyReturnsHandlerValue(t *testing.T) {
+	handler := &stubHandler{triggerKey: "<Shift><Super>d"}
+	object := &dictationObject{handler: handler}
+
+	triggerKey, err := object.TriggerKey()
+	if err != nil {
+		t.Fatalf("TriggerKey() error = %v, want nil", err)
+	}
+	if triggerKey != handler.triggerKey {
+		t.Fatalf("TriggerKey() = %q, want %q", triggerKey, handler.triggerKey)
 	}
 }

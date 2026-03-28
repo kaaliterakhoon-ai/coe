@@ -83,7 +83,7 @@ If you use cloud ASR or LLM providers, put the required API key into `~/.config/
 
 After install, log out and log back in once so GNOME Shell and the user service session both pick up the new extension cleanly.
 
-Then open any app with an input focus, press the default shortcut `<Shift><Super>d`, speak, then press it again. If all is well, your speech should come back as text in that app.
+Then open any app with an input focus, press the default shortcut `<Shift><Super>d`, speak, then press it again. If all is well, your speech should come back as text in that app. In `runtime.mode: fcitx`, the Fcitx panel will show a small Coe status hint while it is listening or processing.
 
 ### Install Dependencies
 
@@ -115,6 +115,8 @@ sudo apt install -y ydotool
 - name: `coe-trigger`
 - default shortcut: `<Shift><Super>d`
 - on GNOME fallback, Coe tries to ensure a matching custom shortcut at startup
+- in `runtime.mode: fcitx`, the Fcitx5 module reads the same `hotkey.preferred_accelerator` over D-Bus
+- the module converts the GNOME-style value like `<Shift><Super>d` to Fcitx key syntax internally
 
 ## Configuration
 

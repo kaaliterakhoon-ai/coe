@@ -83,7 +83,7 @@ bash /tmp/install.sh
 
 インストール後は一度ログアウトして再ログインしてください。GNOME Shell とユーザーサービスセッションの両方が新しい拡張をきれいに読み直せます。
 
-そのあと入力欄のあるアプリを開き、デフォルトショートカット `<Shift><Super>d` を押して話し、もう一度押してください。うまくいけば、そのアプリに話した内容がテキストとして入ります。
+そのあと入力欄のあるアプリを開き、デフォルトショートカット `<Shift><Super>d` を押して話し、もう一度押してください。うまくいけば、そのアプリに話した内容がテキストとして入ります。`runtime.mode: fcitx` では、Fcitx パネルにも Coe の状態が短く表示されます。
 
 ### 依存のインストール
 
@@ -115,6 +115,8 @@ sudo apt install -y ydotool
 - 名前: `coe-trigger`
 - デフォルトショートカット: `<Shift><Super>d`
 - GNOME fallback では、Coe が起動時に対応するカスタムショートカットを自動で揃えます
+- `runtime.mode: fcitx` では、Fcitx5 モジュールが D-Bus 経由で `~/.config/coe/config.yaml` の `hotkey.preferred_accelerator` を読みます
+- モジュール側で GNOME の `<Shift><Super>d` を Fcitx のキー記法に変換します
 
 ## 設定
 

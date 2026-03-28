@@ -25,6 +25,7 @@ type Handler interface {
 	Start(context.Context) error
 	Stop(context.Context) error
 	Status(context.Context) Status
+	TriggerKey(context.Context) string
 }
 
 type Service struct {
@@ -70,6 +71,12 @@ func ConnectSession(handler Handler) (*Service, error) {
 							{Name: "state", Type: "s", Direction: "out"},
 							{Name: "session_id", Type: "s", Direction: "out"},
 							{Name: "detail", Type: "s", Direction: "out"},
+						},
+					},
+					{
+						Name: "TriggerKey",
+						Args: []introspect.Arg{
+							{Name: "trigger_key", Type: "s", Direction: "out"},
 						},
 					},
 				},
@@ -162,4 +169,8 @@ func (o *dictationObject) Stop() *godbus.Error {
 func (o *dictationObject) Status() (string, string, string, *godbus.Error) {
 	status := o.handler.Status(context.Background())
 	return status.State, status.SessionID, status.Detail, nil
+}
+
+func (o *dictationObject) TriggerKey() (string, *godbus.Error) {
+	return o.handler.TriggerKey(context.Background()), nil
 }

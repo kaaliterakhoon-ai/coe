@@ -583,6 +583,13 @@ func (a *App) Status(context.Context) dbusipc.Status {
 	return a.dictationState.Snapshot()
 }
 
+func (a *App) TriggerKey(context.Context) string {
+	if value := strings.TrimSpace(a.Config.Hotkey.PreferredAccelerator); value != "" {
+		return value
+	}
+	return config.Default().Hotkey.PreferredAccelerator
+}
+
 func (a *App) triggerToggle() (bool, error) {
 	return a.triggerToggleFrom("ipc")
 }

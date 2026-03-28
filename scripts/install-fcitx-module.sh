@@ -102,9 +102,11 @@ echo "Next steps:"
 if [[ "${INSTALL_SCOPE}" == "system" ]]; then
   echo "1. Restart Fcitx5 from the target user session, or log out and back in"
   echo "2. Make sure 'coe serve' is running with runtime.mode=fcitx"
-  echo "3. Trigger the module with <Shift><Super>d inside an active Fcitx input context"
+  echo "3. Optional: customize hotkey.preferred_accelerator in ~/.config/coe/config.yaml"
+  echo "4. Trigger the module with Shift+Super+D inside an active Fcitx input context"
 else
   echo "1. If the module does not show up immediately, try the system install path instead"
   echo "2. Make sure 'coe serve' is running with runtime.mode=fcitx"
-  echo "3. Trigger the module with <Shift><Super>d inside an active Fcitx input context"
+  echo "3. Optional: customize hotkey.preferred_accelerator in ~/.config/coe/config.yaml"
+  echo "4. Trigger the module with Shift+Super+D inside an active Fcitx input context"
 fi

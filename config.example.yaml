@@ -177,3 +177,6 @@ notifications:
 #   mode: fcitx
 #   target_desktop: gnome
 #   log_level: info
+#
+# The Fcitx5 module reads this same hotkey over D-Bus and converts it
+# internally to Fcitx key syntax.
