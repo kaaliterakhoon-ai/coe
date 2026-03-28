@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -40,11 +41,22 @@ type FeaturePlan struct {
 	Detail string
 }
 
+type FcitxStatus struct {
+	Binary          Binary
+	Running         bool
+	AddonConfigPath string
+	ModulePath      string
+	LogPath         string
+	LogPresent      bool
+	InitOK          bool
+}
+
 type Capabilities struct {
 	SessionType string
 	Desktop     string
 	DBusSession bool
 	Binaries    map[string]Binary
+	Fcitx       FcitxStatus
 	Portals     portal.Interfaces
 	Hotkey      FeaturePlan
 	Audio       FeaturePlan
@@ -59,8 +71,9 @@ func Probe(ctx context.Context) (Capabilities, error) {
 		SessionType: strings.ToLower(os.Getenv("XDG_SESSION_TYPE")),
 		Desktop:     strings.ToLower(os.Getenv("XDG_CURRENT_DESKTOP")),
 		DBusSession: os.Getenv("DBUS_SESSION_BUS_ADDRESS") != "",
-		Binaries:    detectBinaries("pw-record", "wl-copy", "wtype", "ydotool"),
+		Binaries:    detectBinaries("pw-record", "wl-copy", "wtype", "ydotool", "fcitx5"),
 	}
+	caps.Fcitx = detectFcitx(caps.Binaries["fcitx5"])
 
 	if caps.DBusSession {
 		client, err := portal.ConnectSession()
@@ -96,6 +109,11 @@ func (c Capabilities) Report() string {
 	fmt.Fprintf(&b, "session type: %s\n", blankAsUnknown(c.SessionType))
 	fmt.Fprintf(&b, "desktop: %s\n", blankAsUnknown(c.Desktop))
 	fmt.Fprintf(&b, "dbus session: %t\n", c.DBusSession)
+	fmt.Fprintf(&b, "fcitx5: %s\n", formatBinaryStatus(c.Fcitx.Binary))
+	fmt.Fprintf(&b, "fcitx running: %t\n", c.Fcitx.Running)
+	fmt.Fprintf(&b, "fcitx addon config: %s\n", blankAsMissing(c.Fcitx.AddonConfigPath))
+	fmt.Fprintf(&b, "fcitx module library: %s\n", blankAsMissing(c.Fcitx.ModulePath))
+	fmt.Fprintf(&b, "fcitx init marker: %s\n", formatFcitxInitMarker(c.Fcitx))
 	fmt.Fprintf(&b, "portal global shortcuts: %s\n", formatPortalStatus(c.Portals.GlobalShortcuts))
 	fmt.Fprintf(&b, "portal remote desktop: %s\n", formatPortalStatus(c.Portals.RemoteDesktop))
 	fmt.Fprintf(&b, "portal clipboard: %s\n", formatPortalStatus(c.Portals.Clipboard))
@@ -157,6 +175,76 @@ func detectBinaries(names ...string) map[string]Binary {
 		result[name] = Binary{Name: name, Path: path, Found: true}
 	}
 	return result
+}
+
+func detectFcitx(binary Binary) FcitxStatus {
+	status := FcitxStatus{Binary: binary}
+	if binary.Found {
+		status.Running = processRunning("fcitx5")
+	}
+
+	status.AddonConfigPath = firstExistingPath(
+		systemFcitxAddonPaths()...,
+	)
+	status.ModulePath = firstExistingPath(
+		fcitxModuleSearchPatterns()...,
+	)
+
+	status.LogPath = fmt.Sprintf("/tmp/coe-fcitx-%d.log", os.Getuid())
+	if data, err := os.ReadFile(status.LogPath); err == nil {
+		status.LogPresent = true
+		status.InitOK = strings.Contains(string(data), "init ok")
+	}
+
+	return status
+}
+
+func systemFcitxAddonPaths() []string {
+	paths := []string{"/usr/share/fcitx5/addon/coe.conf"}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		paths = append(paths, filepath.Join(home, ".local/share/fcitx5/addon/coe.conf"))
+	}
+	return paths
+}
+
+func fcitxModuleSearchPatterns() []string {
+	patterns := []string{
+		"/usr/lib/*/fcitx5/libcoefcitx.so",
+		"/usr/lib/fcitx5/libcoefcitx.so",
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		patterns = append(patterns,
+			filepath.Join(home, ".local/lib/*/fcitx5/libcoefcitx.so"),
+			filepath.Join(home, ".local/lib/fcitx5/libcoefcitx.so"),
+		)
+	}
+	return patterns
+}
+
+func firstExistingPath(patterns ...string) string {
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err == nil && len(matches) > 0 {
+			sort.Strings(matches)
+			for _, match := range matches {
+				if _, statErr := os.Stat(match); statErr == nil {
+					return match
+				}
+			}
+		}
+		if _, err := os.Stat(pattern); err == nil {
+			return pattern
+		}
+	}
+	return ""
+}
+
+func processRunning(name string) bool {
+	if name == "" {
+		return false
+	}
+	err := exec.Command("pgrep", "-x", name).Run()
+	return err == nil
 }
 
 func planHotkey(c Capabilities) FeaturePlan {
@@ -245,6 +333,15 @@ func generateNotes(c Capabilities) []string {
 	if c.Hotkey.Mode == ModeExternalBinding {
 		notes = append(notes, "external binding is a degraded fallback and will not preserve hold-to-talk semantics by itself")
 	}
+	if c.Fcitx.Binary.Found && c.Fcitx.ModulePath == "" {
+		notes = append(notes, "fcitx5 is installed but the Coe module library was not found")
+	}
+	if c.Fcitx.Binary.Found && c.Fcitx.AddonConfigPath == "" {
+		notes = append(notes, "fcitx5 is installed but the Coe addon config was not found")
+	}
+	if c.Fcitx.LogPresent && !c.Fcitx.InitOK {
+		notes = append(notes, "fcitx5 module log exists but has not reported init ok")
+	}
 	return notes
 }
 
@@ -253,6 +350,31 @@ func blankAsUnknown(value string) string {
 		return "unknown"
 	}
 	return value
+}
+
+func blankAsMissing(value string) string {
+	if value == "" {
+		return "missing"
+	}
+	return value
+}
+
+func formatBinaryStatus(binary Binary) string {
+	if binary.Found {
+		return fmt.Sprintf("true (%s)", binary.Path)
+	}
+	return "false"
+}
+
+func formatFcitxInitMarker(status FcitxStatus) string {
+	switch {
+	case status.LogPresent && status.InitOK:
+		return fmt.Sprintf("true (%s)", status.LogPath)
+	case status.LogPresent:
+		return fmt.Sprintf("present without init ok (%s)", status.LogPath)
+	default:
+		return "false"
+	}
 }
 
 func formatPortalStatus(status portal.InterfaceStatus) string {

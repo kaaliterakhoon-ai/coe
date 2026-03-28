@@ -101,6 +101,30 @@ func (m ShortcutManager) RemoveTriggerShortcut(ctx context.Context, name string)
 	return m.setShortcutPaths(ctx, filtered)
 }
 
+func (m ShortcutManager) LookupTriggerShortcut(ctx context.Context, name string) (Shortcut, bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = defaultShortcutName
+	}
+
+	paths, err := m.listShortcutPaths(ctx)
+	if err != nil {
+		return Shortcut{}, false, err
+	}
+
+	for _, path := range paths {
+		entry, err := m.readShortcut(ctx, path)
+		if err != nil {
+			return Shortcut{}, false, err
+		}
+		if matchesManagedShortcut(entry, name) {
+			return entry, true, nil
+		}
+	}
+
+	return Shortcut{}, false, nil
+}
+
 func (m ShortcutManager) ensure(ctx context.Context, shortcut Shortcut) error {
 	if strings.TrimSpace(shortcut.Binding) == "" {
 		return fmt.Errorf("GNOME custom shortcut requires a binding")
