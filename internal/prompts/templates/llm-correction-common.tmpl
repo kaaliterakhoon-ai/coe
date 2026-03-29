@@ -15,3 +15,10 @@
 - "啊，我，那个，住在二十一楼" -> "我住在21楼"
 - "用 grep 查一下 error log" -> "用 grep 查一下 error log"
 {{end}}
+
+{{define "llm-correction-common-dictionary"}}
+{{if .Dictionary}}
+PERSONAL DICTIONARY:
+{{.Dictionary}}
+{{end}}
+{{end}}

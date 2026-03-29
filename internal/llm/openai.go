@@ -27,6 +27,7 @@ type OpenAICorrector struct {
 	Prompt         string
 	PromptFile     string
 	PromptTemplate string
+	ResolvedPrompt string
 	HTTPClient     *http.Client
 }
 
@@ -46,17 +47,20 @@ func (c OpenAICorrector) Correct(ctx context.Context, input string) (Result, err
 	}
 
 	endpointType := normalizeEndpointType(c.EndpointType)
-	templateName := strings.TrimSpace(c.PromptTemplate)
-	if templateName == "" {
-		templateName = prompts.TemplateLLMCorrection
-	}
-	instructions, err := prompts.ResolveNamed(templateName, c.Prompt, c.PromptFile, prompts.LLMTemplateData{
-		Provider:     "openai",
-		Model:        defaultCorrectorModel(c.Model),
-		EndpointType: endpointType,
-	})
-	if err != nil {
-		return Result{}, err
+	instructions := strings.TrimSpace(c.ResolvedPrompt)
+	if instructions == "" {
+		templateName := strings.TrimSpace(c.PromptTemplate)
+		if templateName == "" {
+			templateName = prompts.TemplateLLMCorrection
+		}
+		instructions, err = prompts.ResolveNamed(templateName, c.Prompt, c.PromptFile, prompts.LLMTemplateData{
+			Provider:     "openai",
+			Model:        defaultCorrectorModel(c.Model),
+			EndpointType: endpointType,
+		})
+		if err != nil {
+			return Result{}, err
+		}
 	}
 
 	switch endpointType {

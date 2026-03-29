@@ -66,6 +66,26 @@ func TestResolveLLMCorrectionDefault(t *testing.T) {
 	}
 }
 
+func TestResolveLLMCorrectionIncludesDictionaryWhenProvided(t *testing.T) {
+	got, err := ResolveLLMCorrection("", "", LLMTemplateData{
+		Provider:     "openai",
+		Model:        "gpt-4o-mini",
+		EndpointType: "chat",
+		Dictionary:   "- \"system control\" => \"systemctl\"",
+	})
+	if err != nil {
+		t.Fatalf("ResolveLLMCorrection() error = %v", err)
+	}
+	for _, fragment := range []string{
+		"PERSONAL DICTIONARY:",
+		`- "system control" => "systemctl"`,
+	} {
+		if !strings.Contains(got, fragment) {
+			t.Fatalf("dictionary prompt missing %q", fragment)
+		}
+	}
+}
+
 func TestResolveLLMCorrectionOverrideTemplateFile(t *testing.T) {
 	path := filepath.Join("testdata", "llm-override.tmpl")
 

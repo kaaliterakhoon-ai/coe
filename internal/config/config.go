@@ -23,6 +23,7 @@ type Config struct {
 	Audio         AudioConfig         `yaml:"audio"`
 	ASR           ASRConfig           `yaml:"asr"`
 	LLM           LLMConfig           `yaml:"llm"`
+	Dictionary    DictionaryConfig    `yaml:"dictionary"`
 	Output        OutputConfig        `yaml:"output"`
 	Notifications NotificationsConfig `yaml:"notifications"`
 }
@@ -69,6 +70,10 @@ type LLMConfig struct {
 	APIKeyEnv    string `yaml:"api_key_env"`
 	Prompt       string `yaml:"prompt"`
 	PromptFile   string `yaml:"prompt_file"`
+}
+
+type DictionaryConfig struct {
+	File string `yaml:"file"`
 }
 
 type OutputConfig struct {
@@ -126,6 +131,9 @@ func Default() Config {
 			APIKeyEnv:    "OPENAI_API_KEY",
 			Prompt:       "",
 			PromptFile:   "",
+		},
+		Dictionary: DictionaryConfig{
+			File: "",
 		},
 		Output: OutputConfig{
 			EnableAutoPaste:       true,
@@ -199,6 +207,7 @@ func Load(path string) (Config, error) {
 	}
 	cfg.ASR.PromptFile = resolveConfigRelativePath(path, cfg.ASR.PromptFile)
 	cfg.LLM.PromptFile = resolveConfigRelativePath(path, cfg.LLM.PromptFile)
+	cfg.Dictionary.File = resolveConfigRelativePath(path, cfg.Dictionary.File)
 
 	return cfg, nil
 }

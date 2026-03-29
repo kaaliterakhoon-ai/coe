@@ -2,14 +2,18 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
 	"coe/internal/asr"
 	"coe/internal/audio"
 	"coe/internal/capabilities"
 	"coe/internal/config"
 	"coe/internal/control"
+	"coe/internal/dictionary"
 	"coe/internal/focus"
 	"coe/internal/hotkey"
 	"coe/internal/i18n"
@@ -47,17 +51,6 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	localizer := i18n.NewFromEnvironment()
 	sceneState, err := scene.NewState(scene.DefaultCatalog(), scene.IDGeneral)
-	if err != nil {
-		return nil, err
-	}
-	generalCorrector, err := llm.NewCorrectorWithTemplate(cfg.LLM, prompts.TemplateLLMCorrectionGeneral)
-	if err != nil {
-		return nil, err
-	}
-	terminalLLM := cfg.LLM
-	terminalLLM.Prompt = ""
-	terminalLLM.PromptFile = ""
-	terminalCorrector, err := llm.NewCorrectorWithTemplate(terminalLLM, prompts.TemplateLLMCorrectionTerminal)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +145,43 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		}
 	}
 
+	var personalDictionary *dictionary.Dictionary
+	if path := strings.TrimSpace(cfg.Dictionary.File); path != "" {
+		loaded, err := dictionary.Load(path)
+		switch {
+		case err == nil:
+			personalDictionary = loaded
+		case errors.Is(err, os.ErrNotExist):
+			// Optional file: missing means disabled.
+		default:
+			startupWarnings = append(startupWarnings, fmt.Sprintf("personal dictionary unavailable: %v", err))
+		}
+	}
+
+	generalPrompt, err := llm.ResolvePrompt(cfg.LLM, prompts.TemplateLLMCorrectionGeneral, prompts.LLMTemplateData{
+		Dictionary: renderDictionaryPrompt(personalDictionary, scene.IDGeneral),
+	})
+	if err != nil {
+		return nil, err
+	}
+	generalCorrector, err := llm.NewCorrectorWithResolvedPrompt(cfg.LLM, generalPrompt)
+	if err != nil {
+		return nil, err
+	}
+	terminalLLM := cfg.LLM
+	terminalLLM.Prompt = ""
+	terminalLLM.PromptFile = ""
+	terminalPrompt, err := llm.ResolvePrompt(terminalLLM, prompts.TemplateLLMCorrectionTerminal, prompts.LLMTemplateData{
+		Dictionary: renderDictionaryPrompt(personalDictionary, scene.IDTerminal),
+	})
+	if err != nil {
+		return nil, err
+	}
+	terminalCorrector, err := llm.NewCorrectorWithResolvedPrompt(terminalLLM, terminalPrompt)
+	if err != nil {
+		return nil, err
+	}
+
 	instance := &App{
 		Config:            cfg,
 		Caps:              caps,
@@ -161,6 +191,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		Notifier:          notificationService,
 		Localizer:         localizer,
 		StartupWarnings:   startupWarnings,
+		Dictionary:        personalDictionary,
 		SceneState:        sceneState,
 		SceneCorrectors: map[string]llm.Corrector{
 			scene.IDGeneral:  generalCorrector,
@@ -207,4 +238,11 @@ func describeFeature(mode, detail string) string {
 		return mode
 	}
 	return fmt.Sprintf("%s (%s)", mode, detail)
+}
+
+func renderDictionaryPrompt(personalDictionary *dictionary.Dictionary, sceneID string) string {
+	if personalDictionary == nil {
+		return ""
+	}
+	return personalDictionary.RenderPrompt(sceneID)
 }

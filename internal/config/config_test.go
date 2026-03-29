@@ -71,7 +71,7 @@ func TestLoadResolvesPromptFilesRelativeToConfig(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	data := []byte("asr:\n  prompt_file: prompts/asr.tmpl\nllm:\n  prompt_file: prompts/llm.tmpl\n")
+	data := []byte("asr:\n  prompt_file: prompts/asr.tmpl\nllm:\n  prompt_file: prompts/llm.tmpl\ndictionary:\n  file: prompts/dictionary.yaml\n")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -85,6 +85,9 @@ func TestLoadResolvesPromptFilesRelativeToConfig(t *testing.T) {
 	}
 	if cfg.LLM.PromptFile != filepath.Join(dir, "prompts", "llm.tmpl") {
 		t.Fatalf("LLM.PromptFile = %q", cfg.LLM.PromptFile)
+	}
+	if cfg.Dictionary.File != filepath.Join(dir, "prompts", "dictionary.yaml") {
+		t.Fatalf("Dictionary.File = %q", cfg.Dictionary.File)
 	}
 }
 

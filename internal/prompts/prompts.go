@@ -29,6 +29,7 @@ type LLMTemplateData struct {
 	Provider     string
 	Model        string
 	EndpointType string
+	Dictionary   string
 }
 
 //go:embed templates/*.tmpl

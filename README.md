@@ -249,6 +249,23 @@ If you want to use the OpenAI Responses API instead, set `llm.endpoint_type` to 
 `llm.prompt` is also rendered as a Go `text/template` before it is used as correction instructions.
 `llm.prompt_file` works the same way and is preferred when you want the template outside YAML.
 
+### Personal Dictionary
+
+- config field: `dictionary.file`
+- format: YAML with `canonical`, `aliases`, and optional `scenes`
+- wrap strings in double quotes
+- use compact arrays for `aliases` when possible, for example `["system control", "system c t l"]`
+- dictionary entries are injected into the LLM correction prompt and applied again as deterministic post-correction normalization
+- single-character aliases are not injected into prompts; they only use strict token-boundary replacement in code
+- v1 does not hot-reload the dictionary; restart `coe.service` after editing it
+
+Example:
+
+```yaml
+dictionary:
+  file: "./dictionary.yaml"
+```
+
 ### Audio
 
 - recorder: `pw-record`

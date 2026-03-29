@@ -250,6 +250,23 @@ asr:
 
 OpenAI Responses API を使いたい場合は、`llm.endpoint_type` を `responses` にしてください。
 
+### Personal Dictionary
+
+- 設定フィールド: `dictionary.file`
+- 形式: `canonical`、`aliases`、任意の `scenes` を持つ YAML
+- 文字列はダブルクォートで囲むのを推奨
+- `aliases` は `["system control", "system c t l"]` のようなコンパクト配列で書けます
+- 辞書は LLM correction prompt に注入され、さらに LLM 出力後に決定的な正規化をもう一度行います
+- 1 文字 alias は prompt には入れず、コード側の厳格な token 境界置換だけで扱います
+- v1 ではホットリロードしません。編集後は `coe.service` を再起動してください
+
+例:
+
+```yaml
+dictionary:
+  file: "./dictionary.yaml"
+```
+
 ### Audio
 
 - recorder: `pw-record`

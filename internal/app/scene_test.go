@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"coe/internal/dictionary"
 	"coe/internal/i18n"
 	"coe/internal/llm"
 	"coe/internal/notify"
+	"coe/internal/pipeline"
 	"coe/internal/scene"
 )
 
@@ -129,5 +131,30 @@ func TestSwitchSceneChangesCurrentScene(t *testing.T) {
 	}
 	if got := instance.currentScene().ID; got != scene.IDTerminal {
 		t.Fatalf("currentScene().ID = %q, want %q", got, scene.IDTerminal)
+	}
+}
+
+func TestNormalizeForSceneUsesDictionary(t *testing.T) {
+	t.Parallel()
+
+	dict, err := dictionary.Parse([]byte(`
+entries:
+  - canonical: "systemctl"
+    aliases: ["system control"]
+    scenes: ["terminal"]
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	instance := &App{
+		Dictionary: dict,
+	}
+
+	result := instance.normalizeForScene(pipeline.Result{
+		Corrected: "please run system control now",
+	}, scene.IDTerminal)
+	if result.Corrected != "please run systemctl now" {
+		t.Fatalf("Corrected = %q", result.Corrected)
 	}
 }

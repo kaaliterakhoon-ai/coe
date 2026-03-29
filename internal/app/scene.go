@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"coe/internal/llm"
+	"coe/internal/pipeline"
 	"coe/internal/scene"
 )
 
@@ -72,6 +74,22 @@ func (a *App) attemptSceneCommand(ctx context.Context, correctedText string) (sc
 	outcome.Scene = current
 	outcome.MatchedAlias = response.MatchedAlias
 	return outcome, nil
+}
+
+func (a *App) normalizeForScene(result pipeline.Result, sceneID string) pipeline.Result {
+	if a.Dictionary == nil {
+		return result
+	}
+	text := strings.TrimSpace(result.Corrected)
+	if text == "" {
+		return result
+	}
+
+	normalized := strings.TrimSpace(a.Dictionary.Normalize(sceneID, text))
+	if normalized != "" {
+		result.Corrected = normalized
+	}
+	return result
 }
 
 func (a *App) switchSceneByID(sceneID string) (bool, scene.Scene, error) {

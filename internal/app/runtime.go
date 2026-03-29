@@ -164,6 +164,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			activeScene := a.currentScene()
 			corrector := a.correctorForScene(activeScene.ID)
 			processed = processor.ApplyCorrection(ctx, processed, corrector)
+			processed = a.normalizeForScene(processed, activeScene.ID)
 
 			sceneOutcome, sceneErr := a.attemptSceneCommand(ctx, processed.Corrected)
 			if sceneErr != nil {

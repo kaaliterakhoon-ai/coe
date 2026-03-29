@@ -242,6 +242,23 @@ asr:
 
 如果你想改走 OpenAI Responses API，可以把 `llm.endpoint_type` 设成 `responses`。
 
+### 个人词典
+
+- 配置字段：`dictionary.file`
+- 文件格式：YAML，字段是 `canonical`、`aliases`，可选 `scenes`
+- 字符串建议统一用双引号
+- `aliases` 建议用紧凑数组语法，比如 `["system control", "system c t l"]`
+- 词典会注入到 LLM correction prompt，并在 LLM 输出后再做一次确定性归一化
+- 单字符 alias 不注入 prompt，只走程序里的严格 token 边界替换
+- v1 不做热加载；修改词典后重启 `coe.service`
+
+示例：
+
+```yaml
+dictionary:
+  file: "./dictionary.yaml"
+```
+
 ### Audio
 
 - recorder：`pw-record`

@@ -6,6 +6,7 @@ import (
 
 	"coe/internal/capabilities"
 	"coe/internal/config"
+	"coe/internal/dictionary"
 	"coe/internal/hotkey"
 	"coe/internal/i18n"
 	dbusipc "coe/internal/ipc/dbus"
@@ -24,6 +25,7 @@ type App struct {
 	Notifier          notify.Service
 	Localizer         i18n.Localizer
 	StartupWarnings   []string
+	Dictionary        *dictionary.Dictionary
 	Pipeline          pipeline.Orchestrator
 	SceneState        *scene.State
 	SceneCorrectors   map[string]llm.Corrector
