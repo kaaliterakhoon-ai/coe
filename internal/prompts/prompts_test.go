@@ -50,6 +50,7 @@ func TestResolveLLMCorrectionDefault(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		"TASK: clean ASR dictation text.",
+		"if the utterance mixes languages",
 		"drop filler / discourse particles",
 		"dedupe accidental repeated words / phrases",
 		"number words -> Arabic numerals",
@@ -57,6 +58,7 @@ func TestResolveLLMCorrectionDefault(t *testing.T) {
 		"we need three people",
 		"住在二十一楼",
 		"我住在21楼",
+		"用 grep 查一下 error log",
 	} {
 		if !strings.Contains(got, fragment) {
 			t.Fatalf("default correction prompt missing %q", fragment)
