@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_SLUG="quailyquaily/coe"
 PROJECT_NAME="coe"
 DEFAULT_VERSION="latest"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 BIN_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/coe"
@@ -16,6 +17,8 @@ OLD_GNOME_FOCUS_HELPER_UUID="coe-focus-helper@quaily.com"
 GNOME_FOCUS_HELPER_DST="${GNOME_EXTENSIONS_DIR}/${GNOME_FOCUS_HELPER_UUID}"
 OLD_GNOME_FOCUS_HELPER_DST="${GNOME_EXTENSIONS_DIR}/${OLD_GNOME_FOCUS_HELPER_UUID}"
 FCITX_LOG_PATH="/tmp/coe-fcitx-$(id -u).log"
+FCITX_MODULE_DST=""
+FCITX_ADDON_DST=""
 
 INSTALL_MODE_OVERRIDE=""
 LOCAL_BUNDLE_PATH=""
@@ -70,6 +73,54 @@ download_file() {
   fi
   echo "missing downloader: install curl or wget" >&2
   exit 1
+}
+
+resolve_fcitx_layout_helper_path() {
+  local candidate="${SCRIPT_DIR}/resolve-fcitx-layout.sh"
+  if [[ -f "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+
+  if [[ -z "${TMP_DIR:-}" ]]; then
+    echo "Fcitx layout helper is missing next to install.sh and TMP_DIR is not ready" >&2
+    exit 1
+  fi
+
+  candidate="${TMP_DIR}/resolve-fcitx-layout.sh"
+  if [[ -f "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+
+  local helper_url
+  helper_url="$(resolve_fcitx_layout_helper_url)"
+  if [[ -z "${helper_url}" ]]; then
+    echo "Fcitx layout helper is missing and no matching remote helper can be resolved" >&2
+    exit 1
+  fi
+  download_file "${helper_url}" "${candidate}"
+  chmod 0755 "${candidate}"
+  echo "${candidate}"
+}
+
+resolve_fcitx_layout_helper_url() {
+  if [[ -n "${LOCAL_BUNDLE_PATH}" || "${VERSION:-}" == "local-build" ]]; then
+    echo ""
+    return
+  fi
+
+  local helper_ref="refs/heads/master"
+  if [[ -n "${VERSION:-}" && "${VERSION}" != "latest" ]]; then
+    helper_ref="refs/tags/${VERSION}"
+  fi
+  printf 'https://raw.githubusercontent.com/%s/%s/scripts/resolve-fcitx-layout.sh\n' "${REPO_SLUG}" "${helper_ref}"
+}
+
+load_fcitx_layout() {
+  local helper
+  helper="$(resolve_fcitx_layout_helper_path)"
+  eval "$("${helper}" "$@")"
 }
 
 normalize_version() {
@@ -131,7 +182,7 @@ detect_install_mode() {
     return
   fi
 
-  if command -v fcitx5 >/dev/null 2>&1 && [[ -d /usr/share/fcitx5 ]]; then
+  if command -v fcitx5 >/dev/null 2>&1; then
     echo "fcitx"
     return
   fi
@@ -260,26 +311,32 @@ install_gnome_assets() {
 install_fcitx_assets() {
   local runtime_root="$1"
 
-  if [[ ! -d "${runtime_root}/usr" ]]; then
-    echo "release archive missing staged Fcitx5 runtime assets: ${runtime_root}/usr" >&2
+  if [[ ! -d "${runtime_root}" ]]; then
+    echo "release archive missing staged Fcitx5 runtime assets: ${runtime_root}" >&2
     exit 1
   fi
 
   local module_src
-  module_src="$(find "${runtime_root}/usr/lib" -path '*/fcitx5/libcoefcitx.so' | head -n 1)"
-  local addon_src="${runtime_root}/usr/share/fcitx5/addon/coe.conf"
+  module_src="$(find "${runtime_root}" -path '*/fcitx5/libcoefcitx.so' | head -n 1)"
+  local addon_src
+  addon_src="$(find "${runtime_root}" -path '*/share/fcitx5/addon/coe.conf' | head -n 1)"
 
   if [[ -z "${module_src}" || ! -f "${addon_src}" ]]; then
     echo "release archive is missing the Fcitx5 module payload" >&2
     exit 1
   fi
 
-  local module_dst="/${module_src#${runtime_root}/}"
-  local addon_dst="/${addon_src#${runtime_root}/}"
+  load_fcitx_layout
+
+  local module_dst="${FCITX_MODULE_DIR}/libcoefcitx.so"
+  local addon_dst="${FCITX_ADDON_DIR}/coe.conf"
 
   echo "installing Fcitx5 module -> ${module_dst}"
   run_as_root_install -D -m 0755 "${module_src}" "${module_dst}"
   run_as_root_install -D -m 0644 "${addon_src}" "${addon_dst}"
+
+  FCITX_MODULE_DST="${module_dst}"
+  FCITX_ADDON_DST="${addon_dst}"
 
   rm -f "${FCITX_LOG_PATH}"
 }
@@ -432,8 +489,8 @@ if [[ "${INSTALL_GNOME_EXTENSION}" == "1" ]]; then
   echo "- GNOME extension: ${GNOME_FOCUS_HELPER_DST}"
 fi
 if [[ "${INSTALL_MODE}" == "fcitx" ]]; then
-  echo "- fcitx addon config: /usr/share/fcitx5/addon/coe.conf"
-  echo "- fcitx module: installed into /usr/lib/*/fcitx5/libcoefcitx.so"
+  echo "- fcitx addon config: ${FCITX_ADDON_DST}"
+  echo "- fcitx module: ${FCITX_MODULE_DST}"
 fi
 
 echo
