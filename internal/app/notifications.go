@@ -80,10 +80,11 @@ func (a *App) notificationForStart() notify.Message {
 	loc := a.Localizer
 
 	return notify.Message{
-		Title:   loc.Text(i18n.RecordingStartedTitle),
-		Body:    loc.Text(i18n.RecordingStartedBody),
-		Urgency: notify.UrgencyLow,
-		Timeout: 2200 * time.Millisecond,
+		Title:     loc.Text(i18n.RecordingStartedTitle),
+		Body:      loc.Text(i18n.RecordingStartedBody),
+		Urgency:   notify.UrgencyLow,
+		Timeout:   2200 * time.Millisecond,
+		Transient: true,
 	}
 }
 
@@ -95,10 +96,11 @@ func (a *App) notificationForServiceReady() notify.Message {
 	}
 
 	return notify.Message{
-		Title:   loc.Text(i18n.ServiceReadyTitle),
-		Body:    strings.Join(lines, "\n"),
-		Urgency: notify.UrgencyNormal,
-		Timeout: 5000 * time.Millisecond,
+		Title:     loc.Text(i18n.ServiceReadyTitle),
+		Body:      strings.Join(lines, "\n"),
+		Urgency:   notify.UrgencyNormal,
+		Timeout:   5000 * time.Millisecond,
+		Transient: true,
 	}
 }
 
@@ -109,10 +111,11 @@ func (a *App) notificationForSceneSwitched(targetName string) notify.Message {
 
 	loc := a.Localizer
 	return notify.Message{
-		Title:   loc.Text(i18n.SceneSwitchedTitle),
-		Body:    targetName,
-		Urgency: notify.UrgencyNormal,
-		Timeout: 3200 * time.Millisecond,
+		Title:     loc.Text(i18n.SceneSwitchedTitle),
+		Body:      targetName,
+		Urgency:   notify.UrgencyNormal,
+		Timeout:   3200 * time.Millisecond,
+		Transient: true,
 	}
 }
 
@@ -124,10 +127,11 @@ func (a *App) notificationForProcessing(result pipeline.Result, source string) n
 
 	if result.Transcript == "" {
 		return notify.Message{
-			Title:   loc.Text(i18n.NoSpeechDetectedTitle),
-			Body:    normalizeBody(loc.LocalizeWarning(result.TranscriptWarning), loc.Text(i18n.NoSpeechDetectedFallback)),
-			Urgency: notify.UrgencyNormal,
-			Timeout: 4500 * time.Millisecond,
+			Title:     loc.Text(i18n.NoSpeechDetectedTitle),
+			Body:      normalizeBody(loc.LocalizeWarning(result.TranscriptWarning), loc.Text(i18n.NoSpeechDetectedFallback)),
+			Urgency:   notify.UrgencyNormal,
+			Timeout:   4500 * time.Millisecond,
+			Transient: true,
 		}
 	}
 
@@ -156,10 +160,11 @@ func (a *App) notificationForProcessing(result pipeline.Result, source string) n
 	}
 
 	return notify.Message{
-		Title:   loc.Text(i18n.DictationCompleteTitle),
-		Body:    strings.Join(compact(lines), "\n"),
-		Urgency: notify.UrgencyNormal,
-		Timeout: 5000 * time.Millisecond,
+		Title:     loc.Text(i18n.DictationCompleteTitle),
+		Body:      strings.Join(compact(lines), "\n"),
+		Urgency:   notify.UrgencyNormal,
+		Timeout:   5000 * time.Millisecond,
+		Transient: true,
 	}
 }
 
@@ -180,10 +185,11 @@ func (a *App) notificationForFailure(kind failureNotificationKind, err error) no
 	}
 
 	return notify.Message{
-		Title:   title,
-		Body:    err.Error(),
-		Urgency: notify.UrgencyCritical,
-		Timeout: 6000 * time.Millisecond,
+		Title:     title,
+		Body:      err.Error(),
+		Urgency:   notify.UrgencyCritical,
+		Timeout:   6000 * time.Millisecond,
+		Transient: true,
 	}
 }
 

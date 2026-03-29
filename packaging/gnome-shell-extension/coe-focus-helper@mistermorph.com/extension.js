@@ -208,14 +208,37 @@ export default class CoeFocusHelperExtension extends Extension {
     }
 
     for (const scene of scenes) {
-      const item = new PopupMenu.PopupMenuItem(scene.display_name ?? scene.id ?? '');
-      if (scene.current)
-        item.setOrnament(PopupMenu.Ornament.DOT);
-      item.connect('activate', () => {
-        this._switchScene(scene.id);
-      });
-      this._scenesItem.menu.addMenuItem(item);
+      this._scenesItem.menu.addMenuItem(this._buildSceneItem(scene));
     }
+  }
+
+  _buildSceneItem(scene) {
+    const item = new PopupMenu.PopupBaseMenuItem();
+    const markerSlot = new St.Bin({
+      style: 'width: 24px;',
+      x_expand: false,
+      y_expand: false,
+    });
+
+    if (scene.current) {
+      markerSlot.set_child(new St.Icon({
+        icon_name: 'media-record-symbolic',
+        style_class: 'popup-menu-icon',
+      }));
+    }
+
+    const label = new St.Label({
+      text: scene.display_name ?? scene.id ?? '',
+      x_expand: true,
+    });
+
+    item.add_child(markerSlot);
+    item.add_child(label);
+    item.label_actor = label;
+    item.connect('activate', () => {
+      this._switchScene(scene.id);
+    });
+    return item;
   }
 
   _switchScene(sceneId) {

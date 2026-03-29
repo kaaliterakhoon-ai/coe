@@ -70,6 +70,9 @@ func TestNotificationForServiceReady(t *testing.T) {
 	if got := msg.Body; got != "Coe is running.\nPress <Shift><Super>d to start." {
 		t.Fatalf("unexpected body %q", got)
 	}
+	if !msg.Transient {
+		t.Fatal("expected service-ready notification to be transient")
+	}
 }
 
 func TestNotificationForServiceReadyLocalized(t *testing.T) {
@@ -87,6 +90,9 @@ func TestNotificationForServiceReadyLocalized(t *testing.T) {
 	if got := msg.Body; got != "Coe 正在运行。\n按 <Shift><Super>d 开始。" {
 		t.Fatalf("unexpected body %q", got)
 	}
+	if !msg.Transient {
+		t.Fatal("expected localized service-ready notification to be transient")
+	}
 }
 
 func TestNotificationForSceneSwitchedLocalized(t *testing.T) {
@@ -102,6 +108,9 @@ func TestNotificationForSceneSwitchedLocalized(t *testing.T) {
 	}
 	if msg.Body != "ターミナル" {
 		t.Fatalf("unexpected body %q", msg.Body)
+	}
+	if !msg.Transient {
+		t.Fatal("expected scene-switched notification to be transient")
 	}
 }
 
@@ -156,5 +165,8 @@ func TestNotificationForFailureLocalized(t *testing.T) {
 	}
 	if msg.Body != "boom" {
 		t.Fatalf("unexpected body %q", msg.Body)
+	}
+	if !msg.Transient {
+		t.Fatal("expected failure notification to be transient")
 	}
 }
