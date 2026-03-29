@@ -581,6 +581,25 @@ func validateASRConfig(cfg config.ASRConfig) doctorCheck {
 			Detail:  fmt.Sprintf("provider=sensevoice; endpoint=%s; language=%s", endpoint, nonEmpty(cfg.Language, "auto")),
 			Problem: "",
 		}
+	case "qwen3-asr-vllm":
+		endpoint := strings.TrimSpace(cfg.Endpoint)
+		if endpoint == "" {
+			endpoint = "http://127.0.0.1:8000/v1/chat/completions"
+		}
+		model := strings.TrimSpace(cfg.Model)
+		if model == "" {
+			model = "Qwen3-ASR"
+		}
+		keySource, keyOK := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv)
+		if !keyOK {
+			keySource = "optional-missing"
+		}
+		return doctorCheck{
+			Name:    "ASR provider",
+			OK:      true,
+			Detail:  fmt.Sprintf("provider=qwen3-asr-vllm; endpoint=%s; model=%s; api_key=%s", endpoint, model, keySource),
+			Problem: "",
+		}
 	default:
 		return doctorCheck{
 			Name:    "ASR provider",
