@@ -122,8 +122,10 @@ export default class CoeFocusHelperExtension extends Extension {
   _buildIndicator() {
     emitInfo('building panel indicator');
     this._indicator = new PanelMenu.Button(0.0, 'Coe');
+    const indicatorIcon = Gio.icon_new_for_string(
+      GLib.build_filenamev([this.path, 'coe-symbolic.svg']));
     this._indicator.add_child(new St.Icon({
-      icon_name: 'audio-input-microphone-symbolic',
+      gicon: indicatorIcon,
       style_class: 'system-status-icon',
     }));
 
