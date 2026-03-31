@@ -11,6 +11,7 @@ Current scope:
 - falls back to `Shift+Super+D` if Coe is unavailable during module init
 - calls `Toggle()` in `toggle` mode
 - calls `Start()` on press and `Stop()` on release in `hold` mode
+- cancels the current recording when `Escape` is pressed during `recording`
 - subscribes to `StateChanged` / `ResultReady` / `ErrorRaised` over session D-Bus
 - dispatches the result back to the Fcitx main event loop
 - shows a small Fcitx panel hint while Coe is listening or processing

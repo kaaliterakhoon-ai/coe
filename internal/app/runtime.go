@@ -297,6 +297,33 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 		return runtimeCommandResponse{Changed: true}
 	}
 
+	handleCancel := func(source string) runtimeCommandResponse {
+		if captureSession == nil {
+			return runtimeCommandResponse{}
+		}
+
+		effectiveSource := captureSource
+		cancelCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err := captureSession.Cancel(cancelCtx)
+		cancel()
+		captureSession = nil
+		captureSource = ""
+		if err != nil {
+			message := fmt.Sprintf("recording cancel failed: %v", err)
+			status := a.dictationState.Error(message)
+			a.emitStateChanged(logger, status)
+			a.emitDictationError(logger, status.SessionID, message)
+			logger.Error("recording cancel failed", "error", err, "source", effectiveSource, "requested_by", source)
+			a.emitNotification(logger, a.notificationForFailure(failureRecordingStop, err))
+			return runtimeCommandResponse{Err: err}
+		}
+
+		status := a.dictationState.Idle("recording cancelled")
+		a.emitStateChanged(logger, status)
+		logger.Info("recording cancelled", "source", effectiveSource, "requested_by", source)
+		return runtimeCommandResponse{Changed: true}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -328,6 +355,8 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 				}
 			case runtimeCommandStart:
 				response = handleStart(command.Source)
+			case runtimeCommandCancel:
+				response = handleCancel(command.Source)
 			case runtimeCommandStop:
 				response = handleStop(command.Source)
 			default:

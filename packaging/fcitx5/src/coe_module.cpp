@@ -31,6 +31,7 @@ constexpr const char *kObjectPath = "/com/mistermorph/Coe";
 constexpr const char *kInterfaceName = "com.mistermorph.Coe.Dictation1";
 constexpr const char *kDefaultTriggerKey = "Shift+Super+D";
 constexpr const char *kDefaultTriggerMode = "toggle";
+constexpr const char *kEscapeKey = "Escape";
 
 std::string debugMarkerPath() {
     std::ostringstream out;
@@ -717,6 +718,9 @@ private:
 
     void handleKeyEvent(fcitx::Event &event) {
         auto &keyEvent = static_cast<fcitx::KeyEvent &>(event);
+        if (handleEscapePress(keyEvent)) {
+            return;
+        }
         if (!keyEvent.key().check(triggerKey_)) {
             return;
         }
@@ -727,6 +731,38 @@ private:
         }
 
         handleTriggerPress(keyEvent);
+    }
+
+    bool handleEscapePress(fcitx::KeyEvent &keyEvent) {
+        if (keyEvent.isRelease()) {
+            return false;
+        }
+        if (!keyEvent.inputContext()) {
+            return false;
+        }
+        if (!keyEvent.inputContext()->hasFocus()) {
+            return false;
+        }
+
+        const auto escapeKey = fcitx::Key(kEscapeKey).normalize();
+        if (!keyEvent.key().check(escapeKey)) {
+            return false;
+        }
+        if (dictationState_ != "recording") {
+            return false;
+        }
+
+        FCITX_DEBUG() << "coe-fcitx: Escape pressed during recording";
+        appendDebugMarker("escape stop state=" + dictationState_);
+        holding_ = false;
+        if (!callCancel()) {
+            FCITX_WARN() << "coe-fcitx: failed to call Coe Cancel() over D-Bus";
+            appendDebugMarker("escape cancel failed");
+            return false;
+        }
+
+        keyEvent.filterAndAccept();
+        return true;
     }
 
     void handleTriggerPress(fcitx::KeyEvent &keyEvent) {
@@ -829,6 +865,8 @@ private:
     bool callToggle() { return callVoidMethod("Toggle"); }
 
     bool callStart() { return callVoidMethod("Start"); }
+
+    bool callCancel() { return callVoidMethod("Cancel"); }
 
     bool callStop() { return callVoidMethod("Stop"); }
 

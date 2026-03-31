@@ -29,6 +29,7 @@ type Result struct {
 
 type CaptureSession interface {
 	Stop(context.Context) (Result, error)
+	Cancel(context.Context) error
 }
 
 type Recorder interface {
@@ -118,30 +119,44 @@ func (r PWRecord) command(ctx context.Context) (*exec.Cmd, error) {
 
 func (s *pwRecordSession) Stop(ctx context.Context) (Result, error) {
 	s.stopOnce.Do(func() {
-		stoppedAt := time.Now()
-		waitErr := s.stopProcess(ctx)
-		copyErr := <-s.copyErrCh
-
-		s.dataMu.Lock()
-		data := append([]byte(nil), s.data.Bytes()...)
-		s.dataMu.Unlock()
-
-		s.result = Result{
-			Data:       data,
-			ByteCount:  len(data),
-			SampleRate: extractSampleRate(s.cmd.Args),
-			Channels:   extractChannels(s.cmd.Args),
-			Format:     extractFormat(s.cmd.Args),
-			StartedAt:  s.startedAt,
-			StoppedAt:  stoppedAt,
-			Duration:   stoppedAt.Sub(s.startedAt),
-			Stderr:     s.stderr.String(),
-		}
-
-		s.stopErr = errors.Join(normalizeStopError(waitErr, s.result), normalizeCopyError(copyErr))
+		s.result, s.stopErr = s.finalize(ctx, false)
 	})
 
 	return s.result, s.stopErr
+}
+
+func (s *pwRecordSession) Cancel(ctx context.Context) error {
+	s.stopOnce.Do(func() {
+		s.result, s.stopErr = s.finalize(ctx, true)
+	})
+	return s.stopErr
+}
+
+func (s *pwRecordSession) finalize(ctx context.Context, discard bool) (Result, error) {
+	stoppedAt := time.Now()
+	waitErr := s.stopProcess(ctx)
+	copyErr := <-s.copyErrCh
+
+	data := []byte(nil)
+	if !discard {
+		s.dataMu.Lock()
+		data = append([]byte(nil), s.data.Bytes()...)
+		s.dataMu.Unlock()
+	}
+
+	result := Result{
+		Data:       data,
+		ByteCount:  len(data),
+		SampleRate: extractSampleRate(s.cmd.Args),
+		Channels:   extractChannels(s.cmd.Args),
+		Format:     extractFormat(s.cmd.Args),
+		StartedAt:  s.startedAt,
+		StoppedAt:  stoppedAt,
+		Duration:   stoppedAt.Sub(s.startedAt),
+		Stderr:     s.stderr.String(),
+	}
+
+	return result, errors.Join(normalizeSessionEndError(waitErr, result, discard), normalizeCopyError(copyErr))
 }
 
 func (s *pwRecordSession) stopProcess(ctx context.Context) error {
@@ -168,7 +183,7 @@ func normalizeCopyError(err error) error {
 	return err
 }
 
-func normalizeStopError(err error, result Result) error {
+func normalizeSessionEndError(err error, result Result, discard bool) error {
 	if err == nil {
 		return nil
 	}
@@ -186,6 +201,11 @@ func normalizeStopError(err error, result Result) error {
 		return nil
 	}
 	if exitErr.ExitCode() == 130 {
+		return nil
+	}
+	// User-initiated cancel discards audio bytes, so treat pw-record's interrupt
+	// exit status as expected as long as it did not emit a real stderr message.
+	if discard && exitErr.ExitCode() == 1 && strings.TrimSpace(result.Stderr) == "" {
 		return nil
 	}
 	// PipeWire's pw-record exits 1 when interrupted by SIGINT/SIGTERM unless the

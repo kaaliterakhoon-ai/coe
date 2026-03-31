@@ -37,3 +37,23 @@ func TestDictationStateAllocatesNewSessionPerRecording(t *testing.T) {
 		t.Fatalf("session ids are equal: %q", first.SessionID)
 	}
 }
+
+func TestDictationStateIdleClearsSession(t *testing.T) {
+	state := newDictationState()
+
+	recording := state.Recording("first")
+	idle := state.Idle("cancelled")
+
+	if recording.SessionID == "" {
+		t.Fatal("expected recording session id")
+	}
+	if idle.State != "idle" {
+		t.Fatalf("idle.State = %q, want idle", idle.State)
+	}
+	if idle.SessionID != "" {
+		t.Fatalf("idle.SessionID = %q, want empty", idle.SessionID)
+	}
+	if idle.Detail != "cancelled" {
+		t.Fatalf("idle.Detail = %q, want cancelled", idle.Detail)
+	}
+}

@@ -27,6 +27,17 @@ func (s *dictationState) Snapshot() dbusipc.Status {
 	return s.current
 }
 
+func (s *dictationState) Idle(detail string) dbusipc.Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.current = dbusipc.Status{
+		State:  "idle",
+		Detail: detail,
+	}
+	return s.current
+}
+
 func (s *dictationState) Recording(detail string) dbusipc.Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()

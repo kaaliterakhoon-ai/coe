@@ -23,6 +23,7 @@ type Status struct {
 type Handler interface {
 	Toggle(context.Context) error
 	Start(context.Context) error
+	Cancel(context.Context) error
 	Stop(context.Context) error
 	Status(context.Context) Status
 	RuntimeMode(context.Context) string
@@ -69,6 +70,7 @@ func ConnectSession(handler Handler) (*Service, error) {
 				Methods: []introspect.Method{
 					{Name: "Toggle"},
 					{Name: "Start"},
+					{Name: "Cancel"},
 					{Name: "Stop"},
 					{
 						Name: "Status",
@@ -204,6 +206,13 @@ func (o *dictationObject) Toggle() *godbus.Error {
 
 func (o *dictationObject) Start() *godbus.Error {
 	if err := o.handler.Start(context.Background()); err != nil {
+		return godbus.MakeFailedError(err)
+	}
+	return nil
+}
+
+func (o *dictationObject) Cancel() *godbus.Error {
+	if err := o.handler.Cancel(context.Background()); err != nil {
 		return godbus.MakeFailedError(err)
 	}
 	return nil

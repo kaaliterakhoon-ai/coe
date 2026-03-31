@@ -75,6 +75,11 @@ func (a *App) Start(context.Context) error {
 	return err
 }
 
+func (a *App) Cancel(context.Context) error {
+	_, err := a.triggerCancelFrom("fcitx-module")
+	return err
+}
+
 func (a *App) Stop(context.Context) error {
 	_, err := a.triggerStopFrom("fcitx-module")
 	return err
@@ -156,6 +161,18 @@ func (a *App) triggerStartFrom(source string) (bool, error) {
 
 func (a *App) triggerStop() (bool, error) {
 	return a.triggerStopFrom("ipc")
+}
+
+func (a *App) triggerCancel() (bool, error) {
+	return a.triggerCancelFrom("ipc")
+}
+
+func (a *App) triggerCancelFrom(source string) (bool, error) {
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandCancel, source)
+	if err != nil {
+		return false, err
+	}
+	return response.Changed, nil
 }
 
 func (a *App) triggerStopFrom(source string) (bool, error) {

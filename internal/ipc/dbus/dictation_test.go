@@ -9,6 +9,7 @@ import (
 type stubHandler struct {
 	toggleCalls int
 	startCalls  int
+	cancelCalls int
 	stopCalls   int
 	status      Status
 	runtimeMode string
@@ -28,6 +29,11 @@ func (h *stubHandler) Toggle(context.Context) error {
 
 func (h *stubHandler) Start(context.Context) error {
 	h.startCalls++
+	return h.err
+}
+
+func (h *stubHandler) Cancel(context.Context) error {
+	h.cancelCalls++
 	return h.err
 }
 
@@ -102,6 +108,18 @@ func TestDictationObjectStatusReturnsSnapshot(t *testing.T) {
 	}
 	if state != handler.status.State || sessionID != handler.status.SessionID || detail != handler.status.Detail {
 		t.Fatalf("Status() = (%q, %q, %q), want (%q, %q, %q)", state, sessionID, detail, handler.status.State, handler.status.SessionID, handler.status.Detail)
+	}
+}
+
+func TestDictationObjectCancelDelegatesToHandler(t *testing.T) {
+	handler := &stubHandler{}
+	object := &dictationObject{handler: handler}
+
+	if err := object.Cancel(); err != nil {
+		t.Fatalf("Cancel() error = %v, want nil", err)
+	}
+	if handler.cancelCalls != 1 {
+		t.Fatalf("cancelCalls = %d, want 1", handler.cancelCalls)
 	}
 }
 

@@ -6,6 +6,7 @@ const (
 	runtimeCommandToggle runtimeCommandType = "toggle"
 	runtimeCommandStart  runtimeCommandType = "start"
 	runtimeCommandStop   runtimeCommandType = "stop"
+	runtimeCommandCancel runtimeCommandType = "cancel"
 )
 
 type runtimeCommand struct {
