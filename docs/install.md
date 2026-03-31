@@ -9,8 +9,8 @@ The current install target is:
 - one user-scoped binary in `~/.local/bin/coe`
 - one `systemd --user` service
 - one env file for secrets
-- one Fcitx5 module when `fcitx5` is installed
-- one GNOME Shell extension only when the install path falls back to GNOME
+- one Fcitx5 module when the installer selects the `fcitx` runtime path
+- one GNOME Shell extension when the current session is GNOME, or when `--gnome` forces the GNOME path
 
 ## Quick install
 
@@ -41,29 +41,26 @@ You can pin a version explicitly:
 ./scripts/install.sh v0.0.5
 ```
 
-## Local development install
+## Arch Linux
 
-For local testing, you can point the installer at a local release bundle instead of downloading from GitHub Releases.
+An Arch Linux package definition already exists at [`../packaging/aur/coe-git/PKGBUILD`](../packaging/aur/coe-git/PKGBUILD).
 
-Build a bundle first:
-
-```bash
-./scripts/build-release-bundle.sh dev
-```
-
-Then install from either the local tarball:
+With an AUR helper:
 
 ```bash
-./scripts/install.sh --bundle ./dist/release/coe_dev_linux_amd64.tar.gz
+yay -S coe-git
 ```
 
-Or the extracted bundle directory:
+Or build it manually:
 
 ```bash
-./scripts/install.sh --bundle ./dist/release/bundle-amd64
+cd packaging/aur/coe-git
+makepkg -si
 ```
 
-`--bundle` reuses the same install flow as the remote release path. It still installs the binary, user service, env file, and desktop-specific assets; it just skips the download step.
+## Development builds
+
+For source builds, local bundle installs, and Fcitx module builds, see [`development.md`](./development.md).
 
 ## Credentials
 
@@ -112,10 +109,16 @@ Runtime logging:
 
 The installer now chooses the desktop path like this:
 
-- if `fcitx5` is installed, install the Fcitx5 module and set `runtime.mode: fcitx`
+- in auto mode, if `fcitx5` is installed, choose `runtime.mode: fcitx` and install the Fcitx5 module
 - if you pass `--fcitx`, force the Fcitx5 path
 - if you pass `--gnome`, force the GNOME desktop path and set `runtime.mode: desktop`
 - if `fcitx5` is not installed, fall back to the GNOME path automatically
+
+GNOME extension installation is separate from runtime mode:
+
+- on GNOME sessions, the installer copies the Shell extension even if `runtime.mode: fcitx`
+- if you pass `--gnome`, the installer also copies the Shell extension outside GNOME
+- otherwise it skips the Shell extension
 
 You can change the mode later with:
 
@@ -143,13 +146,13 @@ If startup cannot write GNOME shortcut settings, Coe logs a startup warning and 
 
 ## GNOME focus helper
 
-The install script also copies the Coe GNOME Shell extension to:
+On GNOME sessions, or when you pass `--gnome`, the install script also copies the Coe GNOME Shell extension to:
 
 - `~/.local/share/gnome-shell/extensions/coe-focus-helper@mistermorph.com`
 
 If `gnome-extensions` is available, the script will try to enable it. New configs enable focus-aware paste by default.
 
-After installation, log out and log back in once. That gives GNOME Shell and the `systemd --user` session a clean chance to pick up the new extension and user service environment.
+If the installer copied the GNOME Shell extension, log out and log back in once. That gives GNOME Shell and the `systemd --user` session a clean chance to pick up the new extension and user service environment.
 
 ## Useful commands
 

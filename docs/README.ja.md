@@ -14,8 +14,7 @@ Coe は Linux デスクトップ向けの音声入力ツールです。
 
 第一作者は Linux を使っていますが、いま Linux 向けのデスクトップソフトを作りたがる人は多くありません。だから Coe は次を目指します。
 
-- バックグラウンドで動かし、UI 面をできるだけ小さくする
-- 設定はプレーンな YAML
+- バックグラウンドで動かし、設定はプレーンな YAML にし、UI をできるだけ小さくする
 - fcitx、portal clipboard など、すでにある力を先に使う
 - 制約の中でも、できるだけちゃんと音声入力を成立させる
 
@@ -33,41 +32,6 @@ Coe は Linux デスクトップ向けの音声入力ツールです。
 6. 必要なら、転写結果を OpenAI 互換のテキストモデルへ送り、整形します。
 7. 最終テキストを画面に出します。Fcitx 経由でそのまま入力するか、フォーカス中のアプリへ貼り付けます。
 
-補足:
-
-- LLM 整形: デフォルトでは OpenAI 互換 Chat Completions API を使い、必要なら OpenAI Responses API にも切り替え可能です
-- 出力: `desktop` モードではまず GNOME portal clipboard を使い、無理なら `wl-copy` と `ydotool` に落とします
-
-## デスクトップ統合の経路
-
-現時点では二つの経路があります。
-
-- `runtime.mode: fcitx`
-  - 薄い Fcitx5 モジュール
-  - ホットキーは Fcitx 内で処理
-  - 最終テキストは `CommitString` でそのまま入力
-  - 録音中と処理中だけ Fcitx パネルに小さな状態表示
-- `runtime.mode: desktop`
-  - GNOME-first のデスクトップ経路
-  - `GlobalShortcuts` がない場合は GNOME custom shortcut fallback
-  - portal clipboard / paste
-  - terminal-aware paste のための GNOME Shell extension
-
-## GNOME 専用の部分
-
-現時点で GNOME 専用なのは次です。
-
-- インストールスクリプトが GNOME Shell 拡張を入れて、focus-aware paste を有効にすること
-- `GlobalShortcuts` が使えないとき、Coe が GNOME のカスタムショートカット fallback を自動管理すること
-- focus-aware paste が、GNOME Shell 拡張から D-Bus 経由で `wm_class` を読むこと
-
-GNOME 依存が比較的薄いのは、コアの音声入力パイプラインです。
-
-- `pw-record` による録音
-- OpenAI、`whisper.cpp`、SenseVoice による ASR
-- LLM 整形
-- そのデスクトップが許す範囲でのクリップボードと貼り付け
-
 ## インストール
 
 ### クイックインストール
@@ -79,42 +43,19 @@ curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe
 bash /tmp/install.sh
 ```
 
-これは、マシンのアーキテクチャに合った GitHub Release tarball をダウンロードします。`fcitx5` が入っていれば `fcitx` モードを優先し、なければ `desktop` モードに自動でフォールバックします。`--fcitx` で `fcitx` を強制でき、`--gnome` で `desktop` を強制できます。
+これは、マシンのアーキテクチャに合った GitHub Release tarball をダウンロードします。`fcitx5` が入っていれば `fcitx` モードを優先し、なければ `desktop` モードに自動でフォールバックします。
 
-ローカル開発では、GitHub Release から取得せずに `--bundle` でローカルの build 結果をそのままインストールすることもできます。`--bundle` は次のどちらも受け付けます。
+インストール後は `~/.config/coe/config.yaml` を編集し、少なくとも `asr` と `llm` のセクションを設定してください。詳しくは [docs/ja/configuration.md](./ja/configuration.md) を参照してください。
 
-- `./scripts/build-release-bundle.sh` が生成したローカル tarball
-- 展開済み bundle ディレクトリ。例えば `dist/release/bundle-amd64`
-
-例:
-
-```bash
-./scripts/build-release-bundle.sh dev
-./scripts/install.sh --bundle ./dist/release/coe_dev_linux_amd64.tar.gz
-```
-
-その後、次を入れます。
-
-- `~/.local/bin/coe`
-- `~/.config/systemd/user/coe.service`
-- `~/.config/coe/env`
-- `fcitx5` があれば Fcitx5 モジュール
-- `desktop` パスを使う場合だけ GNOME Shell 拡張
-
-その後さらに:
-
-- `coe doctor` を実行
-- `coe.service` を再起動
-- `coe.service` が active か確認
-- バイナリ、設定、env、systemd unit、デスクトップ固有アセットのインストール先を表示
-
-クラウド ASR や LLM provider を使う場合は、必要な API キーを `~/.config/coe/env` に書くか、`~/.config/coe/config.yaml` に直接書いてください。
-
-`fcitx` モードを使う場合は、Fcitx パネルにも録音中と処理中の短い Coe 状態表示が出ます。
-
-現在のパスが `desktop` なら、インストール後に一度ログアウトして再ログインしてください。GNOME Shell とユーザーサービスセッションの両方が新しい拡張をきれいに読み直せます。
+GNOME Shell 上で使う場合は、インストール後に一度ログアウトして再ログインし、GNOME Shell が Coe 拡張を読み込めるようにしてください。
 
 そのあと入力欄のあるアプリを開き、デフォルトショートカット `<Shift><Super>d` を押して話し、もう一度押してください。うまくいけば、そのアプリに話した内容がテキストとして入ります。
+
+### Arch Linux
+
+```bash
+yay -S coe-git
+```
 
 ### 依存のインストール
 
@@ -127,14 +68,6 @@ bash /tmp/install.sh
 
 - `pw-record`
 - `wl-copy`
-
-任意:
-
-- クリップボード: `ydotool`。コマンドラインの paste fallback を試したい場合
-- LLM: OpenAI 互換 API。必要なキーは `~/.config/coe/env` または `llm.api_key`
-- ASR: `whisper-cli` と Whisper モデルファイル。ローカル ASR を使いたい場合
-- ASR: 動作中の SenseVoice FastAPI サービス。SenseVoice 経由のローカルネットワーク ASR を使いたい場合
-- ASR: OpenAI transcription。必要なキーは `~/.config/coe/env` または `asr.api_key`
 
 Ubuntu では、コマンドライン依存を次のように入れられます。
 
@@ -153,159 +86,33 @@ Coe の設定はプレーンなファイルです。
 - `~/.config/coe/config.yaml`
 - リポジトリ例: [config.example.yaml](../config.example.yaml)
 
-実行時状態:
-
-- `XDG_STATE_HOME/coe/state.json`
-- fallback: `~/.config/coe/state.json`
-
-この state ファイルには portal restore token が保存されます。デスクトップ backend が許す場合、再承認の回数を減らすためです。
-
 デフォルト設定を生成するには:
 
 ```bash
 go run ./cmd/coe config init
 ```
 
-`COE_CONFIG` で上書きしていない限り、`~/.config/coe/config.yaml` が作られます。
+`~/.config/coe/config.yaml` が作られます。
 
-あるいは、リポジトリの例から始めてもかまいません。
+完全な設定リファレンスは [docs/ja/configuration.md](./ja/configuration.md) を参照してください。
 
-```bash
-cp config.example.yaml ~/.config/coe/config.yaml
-```
+要点だけ先に書くと:
 
-現在のデフォルトは次の通りです。
+- デフォルトホットキー: `<Shift><Super>d`
+- デフォルトのホットキー動作は `hotkey.trigger_mode: toggle` です。1 回押して開始、もう 1 回押して終了します。オプションの `hold` は押して開始、離して終了で、`runtime.mode: fcitx` のときだけ有効です
+- サポートする ASR provider: `openai`, `whispercpp`, `sensevoice`, `qwen3-asr-vllm`
+- LLM 整形は OpenAI 互換 API 配下の上流モデルをサポートします
 
-### ホットキー
+## デスクトップ統合
 
-- デフォルトトリガーキー: `<Shift><Super>d`
-- デフォルトのトリガー動作: `hotkey.trigger_mode: toggle`
-- `coe config set hotkey.trigger_mode toggle` または `coe config set hotkey.trigger_mode hold` で変更できます
-- `hold` は押して録音開始、離して終了という意味で、`runtime.mode: fcitx` のときだけ有効です
+現在は二つの統合経路があります。
 
-### ASR
+- `runtime.mode: fcitx`: ホットキー、テキスト入力、ディクテーション状態は fcitx が扱います
+- `runtime.mode: desktop`: `GlobalShortcuts` または GNOME custom shortcut fallback がホットキーを扱い、portal clipboard / paste が出力を担当します
 
-- provider: `openai`
-- endpoint: `https://api.openai.com/v1/audio/transcriptions`
-- model: `gpt-4o-mini-transcribe`
-- 直接キーを書くフィールド: `asr.api_key`
-- 環境変数フィールド: `OPENAI_API_KEY`
+**GNOME 専用の部分**
 
-ローカル `whisper.cpp` に切り替えるには:
-
-```yaml
-asr:
-  provider: whispercpp
-  endpoint: ""
-  model: ""
-  language: zh
-  api_key: ""
-  api_key_env: ""
-  binary: whisper-cli
-  model_path: /absolute/path/to/ggml-base.bin
-  threads: 4
-  use_gpu: false
-```
-
-補足:
-
-- `binary` のデフォルトは `whisper-cli`
-- `model_path` は `whisper.cpp` で必須
-- `prompt` は Go の `text/template` としてレンダリングされたうえで初期プロンプトとして渡されます
-- `prompt_file` を使うとテンプレートを別ファイルに置けます。相対パスは `config.yaml` から解決されます
-- `threads` のデフォルトは `GOMAXPROCS`
-- `use_gpu: false` は `--no-gpu` を付けます
-
-SenseVoice FastAPI に切り替えるには:
-
-```yaml
-asr:
-  provider: sensevoice
-  endpoint: http://127.0.0.1:50000/api/v1/asr
-  model: ""
-  language: auto
-  api_key: ""
-  api_key_env: ""
-  binary: ""
-  model_path: ""
-  threads: 0
-  use_gpu: false
-```
-
-補足:
-
-- `endpoint` は公式 SenseVoice FastAPI サービスを指す必要があります
-- `language` はサービスの `lang` フォームフィールドに対応します。例: `auto`, `zh`, `en`, `yue`, `ja`, `ko`
-- Coe は毎回 1 つの WAV を送り、返ってきた `result` 配列の最初の要素を使います
-- 公式リポジトリでは `uvicorn api:app --host 0.0.0.0 --port 50000` で起動すると、既定の URL は `http://127.0.0.1:50000/api/v1/asr` です
-
-### LLM 整形
-
-- provider: `openai`
-- endpoint type: `chat`
-- endpoint: `https://api.openai.com/v1`
-- model: `gpt-5.4-nano`
-- 直接キーを書くフィールド: `llm.api_key`
-- 環境変数フィールド: `OPENAI_API_KEY`
-
-`llm.prompt` も Go の `text/template` としてレンダリングされたうえで補正指示に使われます。
-`llm.prompt_file` も同じ仕組みで、テンプレートを YAML の外に置きたい場合はこちらを優先してください。
-
-OpenAI Responses API を使いたい場合は、`llm.endpoint_type` を `responses` にしてください。
-
-### Personal Dictionary
-
-- 設定フィールド: `dictionary.file`
-- 形式: `canonical`、`aliases`、任意の `scenes` を持つ YAML
-- 文字列はダブルクォートで囲むのを推奨
-- `aliases` は `["system control", "system c t l"]` のようなコンパクト配列で書けます
-- 辞書は LLM correction prompt に注入され、さらに LLM 出力後に決定的な正規化をもう一度行います
-- 1 文字 alias は prompt には入れず、コード側の厳格な token 境界置換だけで扱います
-- v1 ではホットリロードしません。編集後は `coe.service` を再起動してください
-- `coe config init` は `config.yaml` と同じ場所に `./dictionary.yaml` を生成または補完し、2 つのスターター項目を入れます
-
-例:
-
-```yaml
-dictionary:
-  file: "./dictionary.yaml"
-```
-
-### Audio
-
-- recorder: `pw-record`
-- sample rate: `16000`
-- channels: `1`
-- format: `s16`
-
-### Output
-
-- clipboard: `wl-copy`
-- 実行環境が portal を出していれば、clipboard と paste は portal を優先します
-- `wl-copy` と `ydotool` はコマンドライン fallback として残ります
-- 新しい設定では GNOME focus-aware paste がデフォルトで有効で、端末系ターゲットでは `Ctrl+V` から `Ctrl+Shift+V` に切り替えられます
-
-### Notifications
-
-- `enable_system: true`
-- `notify_on_complete: false`
-- `notify_on_recording_start: false`
-
-`notify_on_complete` を有効にすると、完了通知に補正後のテキストが含まれます。
-
-### Runtime
-
-- `log_level: info`
-- `log_level: debug` にすると各段階の所要時間や output fallback の詳細を出します
-- 新規設定では `runtime.mode: fcitx` がデフォルトです。GNOME fallback を強制したい場合だけ `runtime.mode: desktop` に変更してください
-- 1 回だけ上書きするなら `coe serve --log-level debug`
-
-GNOME focus-aware paste については次を参照してください。
-
-- [config.example.yaml](../config.example.yaml)
-- [gnome-focus-helper.md](./gnome-focus-helper.md)
-
-新しく生成した設定では focus-aware paste はデフォルトで有効です。古い設定では、必要に応じて `output.use_gnome_focus_helper` を上書きできます。
+インストールスクリプトは GNOME Shell 拡張も入れます。この拡張はフォーカス中ウィンドウの `wm_class` を D-Bus 経由で公開し、Coe はそれを使って通常アプリか端末系ターゲットかを判定します。
 
 ## 現在の状態
 
@@ -314,18 +121,17 @@ GNOME focus-aware paste については次を参照してください。
 - [x] fcitx 5 モジュールによる他デスクトップ環境への互換
 - [x] 自動管理される GNOME カスタムショートカットから `coe trigger toggle` を実行する GNOME Wayland fallback trigger
 - [x] `pw-record` によるマイク録音
-- [x] OpenAI Audio Transcriptions によるバッチ転写
-- [x] 任意の SenseVoice FastAPI ASR provider
-- [x] デフォルトでは OpenAI 互換 Chat Completions による整形。Responses も選択可能
-- [x] portal clipboard による最終テキストの書き込み
-- [x] portal のキーボード注入による自動貼り付け
+- [x] LLM による重複語やフィラーの整形
+- [x] ASR provider としての SenseVoice FastAPI
 - [x] GNOME デスクトップ通知
-- [x] ほぼ無音の録音はローカルで短絡され、ASR へ送られない
-- [x] クリップが激しい、または壊れた録音もローカルで短絡され、ASR へ送られない
+- [x] 無音または破損録音のフィルタリング
+- [x] 組み込みの基本シーン
 
 まだないもの:
 
 - [ ] 上流のマイク / PipeWire 飽和問題に対する強い結論
+- [ ] カスタム指示
+- [ ] カスタムシーンとシーン切り替え
 
 ## その他
 
@@ -333,13 +139,6 @@ Portal 権限の持続:
 
 - `persist_portal_access` が `true` なら、Coe は portal restore token をローカルに保存します
 - 最初の承認が成功した後は、毎回再承認する代わりにその token の再利用を試みます
-- GNOME や portal backend がその token を拒否した場合は、新しい承認フローに戻ります
-
-システム通知:
-
-- デフォルトで、完了と失敗に対して GNOME デスクトップ通知を送ります
-- ほぼ無音や壊れた録音はローカルで報告され、ネットワーク転写は行いません
-- 録音開始時の通知はデフォルトで無効です
 
 ## コマンド
 
@@ -354,6 +153,8 @@ Portal 権限の持続:
 
 ## ドキュメント
 
+- [docs/ja/development.md](./ja/development.md)
+- [docs/ja/configuration.md](./ja/configuration.md)
 - [docs/README.md](./README.md)
 - [docs/install.md](./install.md)
 - [docs/architecture.md](./architecture.md)

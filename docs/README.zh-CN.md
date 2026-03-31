@@ -14,8 +14,7 @@ Coe 是一个 Linux 桌面上的语音输入工具。
 
 第一作者用的是 Linux，但现在大家不太喜欢给 Linux 开发桌面软件。所以，第一作者希望 Coe 可以：
 
-- 后台运行，尽量减少 UI 面
-- 用纯 YAML 配置
+- 后台运行，纯 YAML 配置，尽量减少 UI 
 - 优先复用别人的能力：fcitx、portal clipboard, etc
 - 尽量在限制下把语音输入做好。
 
@@ -33,31 +32,6 @@ Coe 是一个 Linux 桌面上的语音输入工具。
 6. 可选流程：把 ASR 转写文本发送给 LLM 文本模型做矫正。
 7. 输出上屏：要么通过 Fcitx 直接上屏，要么把文本自动粘贴回当前焦点的 App。
 
-备注：
-
-- LLM 校正：默认支持所有 OpenAI 兼容 Chat Completion API，也可配置为 OpenAI Responses API
-- 输出上屏：desktop 模式下，优先使用 Gnome portal clipboard；不可用时，使用 `wl-copy` 与 `ydotool` 作为 fallback
-
-## 桌面集成路径
-
-当前有两条集成路径：
-
-- `runtime.mode: fcitx`
-  - 极薄的 Fcitx5 module
-  - 热键在 Fcitx 里处理
-  - 最终文本通过 `CommitString` 直接上屏
-  - 录音和处理中会在 Fcitx panel 里显示一个很小的状态提示
-- `runtime.mode: desktop`
-  - GNOME-first 的桌面路径
-  - `GlobalShortcuts` 不可用时走 GNOME custom shortcut fallback
-  - portal clipboard / paste
-  - 通过 GNOME Shell extension 做 terminal-aware paste
-
-## GNOME 专属的部分：
-
-- 安装脚本会安装 GNOME Shell 扩展，用于获取当前焦点的窗口，通过 D-Bus 暴露当前聚焦窗口的 `wm_class`，Coe 需要用它判断目标 App 是普通 App 还是一个 Terminal App
-- 当 `GlobalShortcuts` 不可用时，Coe 会自动管理 GNOME 自定义快捷键
-
 ## 安装
 
 ### 快速安装
@@ -69,45 +43,21 @@ curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe
 bash /tmp/install.sh
 ```
 
-它会下载与你机器架构匹配的 GitHub Release tarball。如果系统里已经装了 `fcitx5`，它会优先走 `fcitx` 模式；否则会自动 fallback 到 `desktop` 模式。你也可以用 `--fcitx` 强制走 `fcitx`，或者用 `--gnome` 强制走 `desktop`。
+它会下载与你机器架构匹配的 GitHub Release tarball。如果系统里已经装了 `fcitx5`，它会优先走 `fcitx` 模式；否则会自动 fallback 到 `desktop` 模式。
 
-如果你在本地开发，也可以用 `--bundle` 直接安装本地构建产物，而不是从 GitHub Release 下载。`--bundle` 支持：
+安装完成以后需要编辑 `~/.config/coe/config.yaml`，至少要配置其中的 `asr` 和 `llm` 章节，具体请参考[docs/zh/configuration.md](./zh/configuration.md)。
 
-- `./scripts/build-release-bundle.sh` 产出的本地 tarball
-- 已经解压好的 bundle 目录，比如 `dist/release/bundle-amd64`
-
-示例：
-
-```bash
-./scripts/build-release-bundle.sh dev
-./scripts/install.sh --bundle ./dist/release/coe_dev_linux_amd64.tar.gz
-```
-
-然后安装：
-
-- `~/.local/bin/coe`
-- `~/.config/systemd/user/coe.service`
-- `~/.config/coe/env`
-- 如果检测到 `fcitx5`，安装 Fcitx5 模块
-- 只有在走 `desktop` 模式时，才安装 GNOME Shell 扩展
-
-安装完以后还会：
-
-- 运行一次 `coe doctor`
-- 重启 `coe.service`
-- 检查 `coe.service` 是否处于 active
-- 打印二进制、配置、env、systemd unit，以及桌面相关资源的安装位置
-
-如果你使用云端 ASR 或 LLM provider，把需要的 API key 填进 `~/.config/coe/env`，或者直接写进 `~/.config/coe/config.yaml`。
-
-如果你使用 `fcitx` 模式，Fcitx panel 还会在录音和处理中显示一条简短的 Coe 状态提示。
-
-如果当前走的是 `desktop` 模式，安装完成后先注销再登录一次，让 GNOME Shell 和用户级服务会话都干净地拿到新扩展。
+如果当前在 GNOME Shell 下，安装完成后先注销再登录一次，让 GNOME Shell 使用 Coe 扩展。
 
 然后打开一个有输入焦点的 App，按下默认快捷键：`<Shift><Super>d`，说话，再按一次，稍等片刻，如果正常的话，会看到说的话变成文字出现在这个 App。
 
-### 安装依赖
+### Arch Linux
 
+```bash
+yay -S coe-git
+```
+
+### 安装依赖
 
 **`fcitx5` 模式**
 
@@ -129,13 +79,6 @@ sudo apt install -y pipewire-bin wl-clipboard
 sudo apt install -y ydotool
 ```
 
-**可选依赖**
-
-- LLM：一个 OpenAI 兼容 API 的 LLM 进行文本纠正，把需要的 API key 放在 `~/.config/coe/env` 或者 `config.yaml` 里的 `llm.api_key`
-- ASR：`whisper-cli` 和一个 Whisper 模型文件，如果你想用本地 ASR
-- ASR：一个正在运行的 SenseVoice FastAPI 服务，如果你想通过 SenseVoice 做本地网络 ASR
-- ASR：OpenAI 提供的 transcribe 服务，把需要的 API key 放在 `~/.config/coe/env` 或者 `config.yaml` 里的 `asr.api_key`
-
 ## 配置
 
 Coe 的配置是纯文件。
@@ -145,159 +88,33 @@ Coe 的配置是纯文件。
 - `~/.config/coe/config.yaml`
 - 仓库示例：[config.example.yaml](../config.example.yaml)
 
-运行时状态：
-
-- `XDG_STATE_HOME/coe/state.json`
-- fallback：`~/.config/coe/state.json`
-
-这个 state 文件会存储 portal restore token，用来在桌面后端支持时减少重复授权弹窗。
-
 生成默认配置：
 
 ```bash
 go run ./cmd/coe config init
 ```
 
-它会写入 `~/.config/coe/config.yaml`，除非你用 `COE_CONFIG` 覆盖了路径。
+它会写入 `~/.config/coe/config.yaml`。
 
-或者直接从仓库示例开始：
+完整配置说明见 [docs/zh/configuration.md](./zh/configuration.md)。
 
-```bash
-cp config.example.yaml ~/.config/coe/config.yaml
-```
+快速摘要：
 
-当前默认值如下：
+- 默认热键：`<Shift><Super>d`
+- 默认热键行为：`hotkey.trigger_mode: toggle`，即按一次开始听写，再按一次结束听写。另有可选值为 `hold`，即长按热键开始听写，释放热键结束听写（只在 `runtime.mode: fcitx` 下生效）
+- 支持的 ASR provider：`openai`、`whispercpp`、`sensevoice`、`qwen3-asr-vllm`
+- LLM 校正：支持所有 openai 兼容 API 的上游模型
 
-### 热键
+## 桌面集成
 
-- 默认触发键：`<Shift><Super>d`
-- 默认触发行为：`hotkey.trigger_mode: toggle`
-- 可以通过 `coe config set hotkey.trigger_mode toggle` 或 `coe config set hotkey.trigger_mode hold` 修改
-- `hold` 表示按下开始录音、松开结束处理，并且只在 `runtime.mode: fcitx` 下生效
+当前有两条集成路径：
 
-### ASR
+- `runtime.mode: fcitx`：由 fcitx 处理热键、上屏、听写处理状态。
+- `runtime.mode: desktop`：由 `GlobalShortcuts` 或者  GNOME custom shortcut fallback 处理热键，由 portal clipboard / paste 处理上屏
 
-- provider：`openai`
-- endpoint：`https://api.openai.com/v1/audio/transcriptions`
-- model：`gpt-4o-mini-transcribe`
-- 直接写 key 的字段：`asr.api_key`
-- 环境变量字段：`OPENAI_API_KEY`
+**GNOME 专属的部分**
 
-如果你要切到本地 `whisper.cpp`：
-
-```yaml
-asr:
-  provider: whispercpp
-  endpoint: ""
-  model: ""
-  language: zh
-  api_key: ""
-  api_key_env: ""
-  binary: whisper-cli
-  model_path: /absolute/path/to/ggml-base.bin
-  threads: 4
-  use_gpu: false
-```
-
-说明：
-
-- `binary` 默认是 `whisper-cli`
-- `model_path` 是 `whisper.cpp` 必填项
-- `prompt` 会先按 Go `text/template` 渲染，再作为初始提示词传入
-- `prompt_file` 可以把模板放进单独文件里；相对路径会按 `config.yaml` 所在目录解析
-- `threads` 默认取 `GOMAXPROCS`
-- `use_gpu: false` 会加上 `--no-gpu`
-
-如果你要切到 SenseVoice FastAPI：
-
-```yaml
-asr:
-  provider: sensevoice
-  endpoint: http://127.0.0.1:50000/api/v1/asr
-  model: ""
-  language: auto
-  api_key: ""
-  api_key_env: ""
-  binary: ""
-  model_path: ""
-  threads: 0
-  use_gpu: false
-```
-
-说明：
-
-- `endpoint` 指向官方 SenseVoice FastAPI 服务
-- `language` 会映射到服务的 `lang` 表单字段，比如 `auto`、`zh`、`en`、`yue`、`ja`、`ko`
-- Coe 每次上传一个 WAV 文件，并使用返回 `result` 数组里的第一条文本
-- 官方仓库用 `uvicorn api:app --host 0.0.0.0 --port 50000` 启动后，默认服务地址就是 `http://127.0.0.1:50000/api/v1/asr`
-
-### LLM 校正
-
-- provider：`openai`
-- endpoint type：`chat`
-- endpoint：`https://api.openai.com/v1`
-- model：`gpt-5.4-nano`
-- 直接写 key 的字段：`llm.api_key`
-- 环境变量字段：`OPENAI_API_KEY`
-
-`llm.prompt` 也会先按 Go `text/template` 渲染，再作为校正指令使用。
-`llm.prompt_file` 也是同样的机制；如果你想把模板放到 YAML 外面，优先用这个。
-
-如果你想改走 OpenAI Responses API，可以把 `llm.endpoint_type` 设成 `responses`。
-
-### 个人词典
-
-- 配置字段：`dictionary.file`
-- 文件格式：YAML，字段是 `canonical`、`aliases`，可选 `scenes`
-- 字符串建议统一用双引号
-- `aliases` 建议用紧凑数组语法，比如 `["system control", "system c t l"]`
-- 词典会注入到 LLM correction prompt，并在 LLM 输出后再做一次确定性归一化
-- 单字符 alias 不注入 prompt，只走程序里的严格 token 边界替换
-- v1 不做热加载；修改词典后重启 `coe.service`
-- `coe config init` 会在 `config.yaml` 同目录下创建或补齐 `./dictionary.yaml`，里面带两条起步示例
-
-示例：
-
-```yaml
-dictionary:
-  file: "./dictionary.yaml"
-```
-
-### Audio
-
-- recorder：`pw-record`
-- sample rate：`16000`
-- channels：`1`
-- format：`s16`
-
-### Output
-
-- clipboard：`wl-copy`
-- 如果运行环境暴露了 portal，剪贴板和粘贴会优先走 portal
-- `wl-copy` 和 `ydotool` 保留为命令行 fallback
-- 新配置默认开启 GNOME focus-aware paste，可在终端类目标里从 `Ctrl+V` 切到 `Ctrl+Shift+V`
-
-### Notifications
-
-- `enable_system: true`
-- `notify_on_complete: false`
-- `notify_on_recording_start: false`
-
-如果开启 `notify_on_complete`，完成通知会带上纠错后的文本。
-
-### Runtime
-
-- `log_level: info`
-- 可以设成 `log_level: debug` 打印各阶段耗时和 output fallback 细节
-- 新生成的配置默认就是 `runtime.mode: fcitx`；只有想强制走 GNOME fallback 时，才需要改成 `runtime.mode: desktop`
-- 也可以单次覆盖：`coe serve --log-level debug`
-
-关于 GNOME focus-aware paste，见：
-
-- [config.example.yaml](../config.example.yaml)
-- [gnome-focus-helper.md](./gnome-focus-helper.md)
-
-新生成的配置默认开启 focus-aware paste。旧配置如果需要，也可以手动覆盖 `output.use_gnome_focus_helper`。
+安装脚本会安装 GNOME Shell 扩展，用于获取当前焦点的窗口，通过 D-Bus 暴露当前聚焦窗口的 `wm_class`，Coe 需要用它判断目标 App 是普通 App 还是一个 Terminal App
 
 ## 当前状态
 
@@ -306,18 +123,17 @@ dictionary:
 - [x] 通过 fcitx 5 模块实现对其他桌面环境的兼容
 - [x] GNOME Wayland fallback trigger：通过自动管理的 GNOME 自定义快捷键执行 `coe trigger toggle`
 - [x] 通过 `pw-record` 录制麦克风
-- [x] 通过 OpenAI Audio Transcriptions 做批量转写
-- [x] 可选的 SenseVoice FastAPI ASR provider
-- [x] 默认通过 OpenAI 兼容 Chat Completions 做文本清洗，也支持 Responses
-- [x] 通过 portal clipboard 写回最终文本
-- [x] 通过 portal 键盘注入自动粘贴最终文本
+- [x] LLM 转写，去除重复词、语气词
+- [x] SenseVoice FastAPI 作为 ASR provider
 - [x] GNOME 桌面通知
-- [x] 接近静音的录音会在本地短路，不再发给 ASR
-- [x] 严重削波或损坏的录音会在本地短路，不再发给 ASR
+- [x] 过滤静音或者损坏的的录音
+- [x] 内置的基础场景 
 
 还没有的部分：
 
 - [ ] 对上游麦克风 / PipeWire 饱和问题的更强结论
+- [ ] 自定义指令
+- [ ] 自定义场景以及场景切换
 
 ## 其他
 
@@ -325,13 +141,6 @@ Portal 权限持久化：
 
 - 如果 `persist_portal_access` 为 `true`，Coe 会把 portal restore token 存到本地
 - 第一次授权成功后，后续运行会尽量复用这个 token，而不是每次都重新弹窗
-- 如果 GNOME 或 portal backend 拒绝旧 token，Coe 会回退到重新授权
-
-系统通知：
-
-- 默认会对“听写完成”和“失败”发 GNOME 桌面通知
-- 接近静音或损坏的录音会在本地被报告并跳过网络转写
-- 默认不在“开始录音”时发通知
 
 ## 命令
 
@@ -346,6 +155,8 @@ Portal 权限持久化：
 
 ## 文档
 
+- [docs/zh/development.md](./zh/development.md)
+- [docs/zh/configuration.md](./zh/configuration.md)
 - [docs/README.md](./README.md)
 - [docs/install.md](./install.md)
 - [docs/arch-install.md](./arch-install.md)

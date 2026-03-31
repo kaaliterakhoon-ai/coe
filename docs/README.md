@@ -1,5 +1,7 @@
 # Coe Docs
 
+- [development.md](./development.md): source-build workflow, local release bundle installs, and module build commands.
+- [configuration.md](./configuration.md): full config reference, defaults, and provider-specific examples.
 - [install.md](./install.md): alpha installation flow with `systemd --user`, env file setup, and auto-managed GNOME shortcut fallback.
 - [arch-install.md](./arch-install.md): Arch Linux `makepkg` installation flow, Fcitx5 packaging notes, and first-run checks.
 - [architecture.md](./architecture.md): target architecture and the current shipped implementation split apart clearly.
