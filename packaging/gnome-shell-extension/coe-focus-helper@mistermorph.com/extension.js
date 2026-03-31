@@ -9,6 +9,8 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 const OBJECT_PATH = '/org/gnome/Shell/Extensions/FocusWmClass';
 const COE_SERVICE_NAME = 'com.mistermorph.Coe';
 const COE_OBJECT_PATH = '/com/mistermorph/Coe';
+const FCITX_RUNTIME_MODE = 'fcitx';
+const DESKTOP_RUNTIME_MODE = 'desktop';
 const INTERFACE_XML = `
 <node>
   <interface name="org.gnome.Shell.Extensions.FocusWmClass">
@@ -20,6 +22,9 @@ const INTERFACE_XML = `
 const COE_INTERFACE_XML = `
 <node>
   <interface name="com.mistermorph.Coe.Dictation1">
+    <method name="RuntimeMode">
+      <arg name="runtime_mode" type="s" direction="out"/>
+    </method>
     <method name="CurrentScene">
       <arg name="scene_id" type="s" direction="out"/>
       <arg name="display_name" type="s" direction="out"/>
@@ -260,27 +265,132 @@ export default class CoeFocusHelperExtension extends Extension {
   }
 
   _restartCoe() {
-    emitInfo('restarting coe.service');
-    try {
-      const proc = Gio.Subprocess.new(
+    this._detectRuntimeMode(runtimeMode => {
+      const normalizedMode = this._normalizeRuntimeMode(runtimeMode);
+      const shouldRestartFcitx = normalizedMode === FCITX_RUNTIME_MODE;
+      emitInfo(`restarting coe.service (runtime.mode=${normalizedMode})`);
+      this._runCommand(
         ['systemctl', '--user', 'restart', 'coe.service'],
-        Gio.SubprocessFlags.NONE);
+        'coe.service restart',
+        () => {
+          emitInfo('coe.service restart completed');
+          if (!shouldRestartFcitx) {
+            this._scheduleScenesRefresh();
+            return;
+          }
+
+          emitInfo('runtime.mode=fcitx, restarting fcitx5');
+          this._runCommand(
+            ['fcitx5', '-rd'],
+            'fcitx5 restart',
+            () => {
+              emitInfo('fcitx5 restart completed');
+              this._scheduleScenesRefresh();
+            },
+            error => {
+              emitError('failed to restart fcitx5', error);
+              Main.notifyError('Coe', `Restarted Coe, but failed to restart fcitx5: ${error.message}`);
+              this._scheduleScenesRefresh();
+            });
+        },
+        error => {
+          emitError('failed to restart coe.service', error);
+          Main.notifyError('Coe', `Failed to restart Coe: ${error.message}`);
+        });
+    });
+  }
+
+  _detectRuntimeMode(callback) {
+    if (this._coeProxy?.RuntimeModeRemote) {
+      this._coeProxy.RuntimeModeRemote((result, error) => {
+        if (error) {
+          emitError('RuntimeMode failed, falling back to config file', error);
+          callback(this._readRuntimeModeFromConfig());
+          return;
+        }
+
+        const [runtimeMode] = result ?? [];
+        callback(this._normalizeRuntimeMode(runtimeMode));
+      });
+      return;
+    }
+
+    callback(this._readRuntimeModeFromConfig());
+  }
+
+  _readRuntimeModeFromConfig() {
+    const configPath = GLib.getenv('COE_CONFIG') ||
+      GLib.build_filenamev([GLib.get_home_dir(), '.config', 'coe', 'config.yaml']);
+
+    try {
+      const [ok, contents] = GLib.file_get_contents(configPath);
+      if (!ok)
+        return DESKTOP_RUNTIME_MODE;
+
+      return this._parseRuntimeMode(new TextDecoder().decode(contents));
+    } catch (error) {
+      emitError(`failed to read runtime.mode from ${configPath}`, error);
+      return DESKTOP_RUNTIME_MODE;
+    }
+  }
+
+  _parseRuntimeMode(contents) {
+    let inRuntime = false;
+
+    for (const rawLine of contents.split('\n')) {
+      const line = rawLine.replace(/\r$/, '');
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#'))
+        continue;
+
+      if (!line.startsWith(' ') && !line.startsWith('\t')) {
+        inRuntime = /^runtime\s*:\s*$/.test(trimmed);
+        continue;
+      }
+
+      if (!inRuntime)
+        continue;
+
+      const match = line.match(/^\s*mode\s*:\s*([^#\s]+|"[^"]+"|'[^']+')\s*(?:#.*)?$/);
+      if (!match)
+        continue;
+
+      return this._normalizeRuntimeMode(match[1]);
+    }
+
+    return FCITX_RUNTIME_MODE;
+  }
+
+  _normalizeRuntimeMode(value) {
+    const normalized = `${value ?? ''}`.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
+    if (normalized === FCITX_RUNTIME_MODE)
+      return FCITX_RUNTIME_MODE;
+    if (normalized === DESKTOP_RUNTIME_MODE)
+      return DESKTOP_RUNTIME_MODE;
+    return DESKTOP_RUNTIME_MODE;
+  }
+
+  _runCommand(argv, description, onSuccess, onFailure) {
+    try {
+      const proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.NONE);
       proc.wait_check_async(null, (subprocess, result) => {
         try {
           subprocess.wait_check_finish(result);
-          emitInfo('coe.service restart completed');
-          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-            this._refreshScenes();
-            return GLib.SOURCE_REMOVE;
-          });
+          onSuccess?.();
         } catch (error) {
-          emitError('failed to restart coe.service', error);
-          Main.notifyError('Coe', `Failed to restart Coe: ${error.message}`);
+          onFailure?.(error);
         }
       });
     } catch (error) {
-      emitError('failed to spawn systemctl restart for coe.service', error);
-      Main.notifyError('Coe', `Failed to restart Coe: ${error.message}`);
+      emitError(`failed to spawn ${description}`, error);
+      onFailure?.(error);
     }
+  }
+
+  _scheduleScenesRefresh() {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+      this._refreshScenes();
+      return GLib.SOURCE_REMOVE;
+    });
   }
 }

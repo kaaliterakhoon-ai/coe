@@ -87,6 +87,14 @@ func (a *App) Status(context.Context) dbusipc.Status {
 	return a.withSceneDetail(a.dictationState.Snapshot())
 }
 
+func (a *App) RuntimeMode(context.Context) string {
+	mode := config.NormalizeRuntimeMode(a.Config.Runtime.Mode)
+	if mode == "" {
+		return config.Default().Runtime.Mode
+	}
+	return mode
+}
+
 func (a *App) TriggerKey(context.Context) string {
 	if value := strings.TrimSpace(a.Config.Hotkey.PreferredAccelerator); value != "" {
 		return value

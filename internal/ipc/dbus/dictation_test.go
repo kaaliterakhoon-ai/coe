@@ -11,6 +11,7 @@ type stubHandler struct {
 	startCalls  int
 	stopCalls   int
 	status      Status
+	runtimeMode string
 	triggerKey  string
 	triggerMode string
 	sceneID     string
@@ -37,6 +38,10 @@ func (h *stubHandler) Stop(context.Context) error {
 
 func (h *stubHandler) Status(context.Context) Status {
 	return h.status
+}
+
+func (h *stubHandler) RuntimeMode(context.Context) string {
+	return h.runtimeMode
 }
 
 func (h *stubHandler) TriggerKey(context.Context) string {
@@ -110,6 +115,19 @@ func TestDictationObjectTriggerKeyReturnsHandlerValue(t *testing.T) {
 	}
 	if triggerKey != handler.triggerKey {
 		t.Fatalf("TriggerKey() = %q, want %q", triggerKey, handler.triggerKey)
+	}
+}
+
+func TestDictationObjectRuntimeModeReturnsHandlerValue(t *testing.T) {
+	handler := &stubHandler{runtimeMode: "fcitx"}
+	object := &dictationObject{handler: handler}
+
+	runtimeMode, err := object.RuntimeMode()
+	if err != nil {
+		t.Fatalf("RuntimeMode() error = %v, want nil", err)
+	}
+	if runtimeMode != handler.runtimeMode {
+		t.Fatalf("RuntimeMode() = %q, want %q", runtimeMode, handler.runtimeMode)
 	}
 }
 

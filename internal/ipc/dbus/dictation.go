@@ -25,6 +25,7 @@ type Handler interface {
 	Start(context.Context) error
 	Stop(context.Context) error
 	Status(context.Context) Status
+	RuntimeMode(context.Context) string
 	TriggerKey(context.Context) string
 	TriggerMode(context.Context) string
 	CurrentScene(context.Context) (string, string)
@@ -75,6 +76,12 @@ func ConnectSession(handler Handler) (*Service, error) {
 							{Name: "state", Type: "s", Direction: "out"},
 							{Name: "session_id", Type: "s", Direction: "out"},
 							{Name: "detail", Type: "s", Direction: "out"},
+						},
+					},
+					{
+						Name: "RuntimeMode",
+						Args: []introspect.Arg{
+							{Name: "runtime_mode", Type: "s", Direction: "out"},
 						},
 					},
 					{
@@ -212,6 +219,10 @@ func (o *dictationObject) Stop() *godbus.Error {
 func (o *dictationObject) Status() (string, string, string, *godbus.Error) {
 	status := o.handler.Status(context.Background())
 	return status.State, status.SessionID, status.Detail, nil
+}
+
+func (o *dictationObject) RuntimeMode() (string, *godbus.Error) {
+	return o.handler.RuntimeMode(context.Background()), nil
 }
 
 func (o *dictationObject) TriggerKey() (string, *godbus.Error) {
