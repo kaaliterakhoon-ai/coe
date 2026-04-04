@@ -197,7 +197,7 @@ fcitx5 -rd
 
 ### `makepkg` 时 Fcitx5 模块编译失败
 
-先确认你当前使用的是仓库里的最新 [packaging/aur/coe-git/PKGBUILD](/home/susu/GitHub/coe/packaging/aur/coe-git/PKGBUILD)，因为 Arch 下需要依赖 `prepare()` 里的 C++20 替换。
+先确认你当前使用的是仓库里的最新 [packaging/aur/coe-git/PKGBUILD](../packaging/aur/coe-git/PKGBUILD)，因为 Arch 下需要依赖 `prepare()` 里的 C++20 替换。
 
 ### `Unknown argument --destdir`
 

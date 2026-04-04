@@ -8,7 +8,7 @@
 - 再把 WAV 做 base64
 - 最后通过 OpenAI 兼容的 `/v1/chat/completions` 发送 `input_audio`
 
-对应代码见 [internal/asr/qwen3_vllm.go](/home/susu/GitHub/coe/internal/asr/qwen3_vllm.go)。
+对应代码见 [internal/asr/qwen3_vllm.go](../internal/asr/qwen3_vllm.go)。
 
 ## 适用场景
 
@@ -193,7 +193,7 @@ journalctl --user -u coe.service -f
 
 Coe 会把它当成空转写或 warning。
 
-相关实现见 [internal/asr/qwen3_vllm.go](/home/susu/GitHub/coe/internal/asr/qwen3_vllm.go) 和测试 [internal/asr/qwen3_vllm_test.go](/home/susu/GitHub/coe/internal/asr/qwen3_vllm_test.go)。
+相关实现见 [internal/asr/qwen3_vllm.go](../internal/asr/qwen3_vllm.go) 和测试 [internal/asr/qwen3_vllm_test.go](../internal/asr/qwen3_vllm_test.go)。
 
 ### 返回文本前面带 `<asr_text>`
 
