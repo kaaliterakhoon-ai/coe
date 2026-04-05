@@ -12,7 +12,6 @@ import (
 	"coe/internal/audio"
 	"coe/internal/capabilities"
 	"coe/internal/config"
-	"coe/internal/control"
 	"coe/internal/dictionary"
 	"coe/internal/focus"
 	"coe/internal/hotkey"
@@ -96,23 +95,12 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		description = "fcitx module over D-Bus"
 	}
 	service := hotkey.Service(hotkey.PlannedService{Description: description})
-	var external *hotkey.ExternalTriggerService
-	var controlSocketPath string
 	startupWarnings := make([]string, 0, 2)
 
 	if cfg.Runtime.TargetDesktop == "gnome" {
 		manager := gnome.NewShortcutManager()
 		if desktopRuntime {
 			if caps.Hotkey.Mode == capabilities.ModeExternalBinding {
-				external = hotkey.NewExternalTriggerService(description)
-				service = external
-
-				socketPath, err := control.ResolveSocketPath()
-				if err != nil {
-					return nil, err
-				}
-				controlSocketPath = socketPath
-
 				if err := manager.EnsureTriggerShortcut(ctx, cfg.Hotkey.Name, cfg.Hotkey.PreferredAccelerator); err != nil {
 					startupWarnings = append(startupWarnings, fmt.Sprintf("GNOME custom shortcut setup failed: %v", err))
 				}
@@ -183,16 +171,14 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 
 	instance := &App{
-		Config:            cfg,
-		Caps:              caps,
-		Hotkey:            service,
-		ExternalHotkey:    external,
-		ControlSocketPath: controlSocketPath,
-		Notifier:          notificationService,
-		Localizer:         localizer,
-		StartupWarnings:   startupWarnings,
-		Dictionary:        personalDictionary,
-		SceneState:        sceneState,
+		Config:          cfg,
+		Caps:            caps,
+		Hotkey:          service,
+		Notifier:        notificationService,
+		Localizer:       localizer,
+		StartupWarnings: startupWarnings,
+		Dictionary:      personalDictionary,
+		SceneState:      sceneState,
 		SceneCorrectors: map[string]llm.Corrector{
 			scene.IDGeneral:  generalCorrector,
 			scene.IDTerminal: terminalCorrector,
@@ -222,8 +208,13 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		},
 	}
 
+	dictationBusRequired := cfg.Runtime.Mode == config.RuntimeModeFcitx ||
+		(desktopRuntime && caps.Hotkey.Mode == capabilities.ModeExternalBinding)
 	dictationBus, err := dbusipc.ConnectSession(instance)
 	if err != nil {
+		if dictationBusRequired {
+			return nil, fmt.Errorf("dictation D-Bus service unavailable: %w", err)
+		}
 		instance.StartupWarnings = append(instance.StartupWarnings, fmt.Sprintf("dictation D-Bus service unavailable: %v", err))
 	} else {
 		instance.DictationBus = dictationBus

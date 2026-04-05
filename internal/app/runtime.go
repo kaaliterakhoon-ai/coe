@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"coe/internal/audio"
-	"coe/internal/control"
 	"coe/internal/hotkey"
 	"coe/internal/output"
 )
@@ -47,27 +46,11 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 		"terminal_paste_shortcut", output.NormalizePasteShortcut(a.Config.Output.TerminalPasteShortcut),
 		"gnome_focus_helper", a.Config.Output.UseGNOMEFocusHelper,
 	}
-	if a.ControlSocketPath != "" {
-		wiringAttrs = append(wiringAttrs, "control_socket", a.ControlSocketPath)
-	}
 	logger.Info("runtime wiring", wiringAttrs...)
 	for _, warning := range a.StartupWarnings {
 		logger.Warn("startup warning", "warning", warning)
 	}
 	logger.Info("runtime is scaffolded; waiting for signal")
-
-	var controlErrCh chan error
-	if a.ExternalHotkey != nil {
-		server, err := control.NewServer(a.ControlSocketPath, a.handleControl)
-		if err != nil {
-			return err
-		}
-
-		controlErrCh = make(chan error, 1)
-		go func() {
-			controlErrCh <- server.Serve(ctx)
-		}()
-	}
 
 	events, err := a.Hotkey.Events(ctx)
 	if err != nil {
@@ -339,11 +322,6 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			}
 			logger.Info("shutting down")
 			return nil
-		case err := <-controlErrCh:
-			if err != nil {
-				return err
-			}
-			controlErrCh = nil
 		case command := <-a.runtimeCommands:
 			var response runtimeCommandResponse
 			switch command.Type {

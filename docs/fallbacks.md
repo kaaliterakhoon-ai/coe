@@ -50,7 +50,7 @@ The shipped control surface is:
 - `coe trigger stop`
 - `coe trigger status`
 
-These commands talk to the running daemon over a local Unix socket.
+These commands talk to the running daemon over the session D-Bus service.
 
 ## Third-party binary policy
 
@@ -142,9 +142,9 @@ The repository should support:
 - `coe trigger stop`
 - `coe trigger status`
 
-These commands talk to the running daemon over a local Unix socket.
+These commands talk to the running daemon over the session D-Bus service.
 
-That socket-based control plane is the fallback foundation for GNOME.
+That D-Bus control plane is the fallback foundation for GNOME.
 
 ## Current repository status
 

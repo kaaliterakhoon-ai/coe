@@ -20,11 +20,21 @@ type Status struct {
 	Detail    string
 }
 
+type TriggerResponse struct {
+	OK      bool
+	Message string
+	Active  bool
+}
+
 type Handler interface {
 	Toggle(context.Context) error
 	Start(context.Context) error
 	Cancel(context.Context) error
 	Stop(context.Context) error
+	TriggerToggle(context.Context) TriggerResponse
+	TriggerStart(context.Context) TriggerResponse
+	TriggerStop(context.Context) TriggerResponse
+	TriggerStatus(context.Context) TriggerResponse
 	Status(context.Context) Status
 	RuntimeMode(context.Context) string
 	TriggerKey(context.Context) string
@@ -72,6 +82,38 @@ func ConnectSession(handler Handler) (*Service, error) {
 					{Name: "Start"},
 					{Name: "Cancel"},
 					{Name: "Stop"},
+					{
+						Name: "TriggerToggle",
+						Args: []introspect.Arg{
+							{Name: "ok", Type: "b", Direction: "out"},
+							{Name: "message", Type: "s", Direction: "out"},
+							{Name: "active", Type: "b", Direction: "out"},
+						},
+					},
+					{
+						Name: "TriggerStart",
+						Args: []introspect.Arg{
+							{Name: "ok", Type: "b", Direction: "out"},
+							{Name: "message", Type: "s", Direction: "out"},
+							{Name: "active", Type: "b", Direction: "out"},
+						},
+					},
+					{
+						Name: "TriggerStop",
+						Args: []introspect.Arg{
+							{Name: "ok", Type: "b", Direction: "out"},
+							{Name: "message", Type: "s", Direction: "out"},
+							{Name: "active", Type: "b", Direction: "out"},
+						},
+					},
+					{
+						Name: "TriggerStatus",
+						Args: []introspect.Arg{
+							{Name: "ok", Type: "b", Direction: "out"},
+							{Name: "message", Type: "s", Direction: "out"},
+							{Name: "active", Type: "b", Direction: "out"},
+						},
+					},
 					{
 						Name: "Status",
 						Args: []introspect.Arg{
@@ -223,6 +265,26 @@ func (o *dictationObject) Stop() *godbus.Error {
 		return godbus.MakeFailedError(err)
 	}
 	return nil
+}
+
+func (o *dictationObject) TriggerToggle() (bool, string, bool, *godbus.Error) {
+	resp := o.handler.TriggerToggle(context.Background())
+	return resp.OK, resp.Message, resp.Active, nil
+}
+
+func (o *dictationObject) TriggerStart() (bool, string, bool, *godbus.Error) {
+	resp := o.handler.TriggerStart(context.Background())
+	return resp.OK, resp.Message, resp.Active, nil
+}
+
+func (o *dictationObject) TriggerStop() (bool, string, bool, *godbus.Error) {
+	resp := o.handler.TriggerStop(context.Background())
+	return resp.OK, resp.Message, resp.Active, nil
+}
+
+func (o *dictationObject) TriggerStatus() (bool, string, bool, *godbus.Error) {
+	resp := o.handler.TriggerStatus(context.Background())
+	return resp.OK, resp.Message, resp.Active, nil
 }
 
 func (o *dictationObject) Status() (string, string, string, *godbus.Error) {

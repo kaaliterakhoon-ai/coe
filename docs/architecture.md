@@ -28,7 +28,7 @@ The repository currently ships and has been manually validated for this degraded
 What is implemented now:
 
 - native capability probing through session D-Bus
-- external-trigger fallback through a local Unix socket
+- external-trigger fallback through session D-Bus
 - `pw-record` capture lifecycle
 - OpenAI ASR client
 - OpenAI LLM corrector
@@ -130,7 +130,7 @@ Important nuance:
 
 - External-trigger mode is intentionally degraded.
 - It does not preserve true press/release hold-to-talk semantics on its own.
-- On GNOME, the supported degraded behavior is toggle-style control over a local daemon socket.
+- On GNOME, the supported degraded behavior is toggle-style control over the daemon's session D-Bus service.
 
 Today, the repository implements only the third path in production use on GNOME 46-class systems.
 
@@ -203,12 +203,11 @@ Responsibility:
 Interfaces:
 
 - `PortalHotkeyService`
-- `ExternalTriggerService`
 - `NoopHotkeyService`
 
 Fallback behavior:
 
-- `ExternalTriggerService` is fed by local control commands such as `coe trigger toggle`.
+- GNOME fallback commands such as `coe trigger toggle` forward directly to the daemon over session D-Bus.
 - This is the supported GNOME fallback when `GlobalShortcuts` is missing.
 
 ### 8.3 Recorder

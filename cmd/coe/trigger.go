@@ -5,17 +5,14 @@ import (
 	"errors"
 	"fmt"
 
-	"coe/internal/control"
+	dbusipc "coe/internal/ipc/dbus"
 )
+
+var sendTrigger = dbusipc.SendTrigger
 
 func runTrigger(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: coe trigger <toggle|start|stop|status>")
-	}
-
-	socketPath, err := control.ResolveSocketPath()
-	if err != nil {
-		return err
 	}
 
 	command, err := parseTriggerCommand(args[0])
@@ -23,9 +20,9 @@ func runTrigger(ctx context.Context, args []string) error {
 		return err
 	}
 
-	resp, err := control.Send(ctx, socketPath, control.Request{Command: command})
+	resp, err := sendTrigger(ctx, command)
 	if err != nil {
-		return err
+		return fmt.Errorf("send trigger command over D-Bus: %w", err)
 	}
 
 	fmt.Printf("%s (active=%t)\n", resp.Message, resp.Active)
@@ -35,16 +32,16 @@ func runTrigger(ctx context.Context, args []string) error {
 	return nil
 }
 
-func parseTriggerCommand(arg string) (control.Command, error) {
+func parseTriggerCommand(arg string) (dbusipc.TriggerCommand, error) {
 	switch arg {
 	case "toggle":
-		return control.CommandTriggerToggle, nil
+		return dbusipc.TriggerCommandToggle, nil
 	case "start":
-		return control.CommandTriggerStart, nil
+		return dbusipc.TriggerCommandStart, nil
 	case "stop":
-		return control.CommandTriggerStop, nil
+		return dbusipc.TriggerCommandStop, nil
 	case "status":
-		return control.CommandTriggerStatus, nil
+		return dbusipc.TriggerCommandStatus, nil
 	default:
 		return "", fmt.Errorf("unknown trigger command %q", arg)
 	}

@@ -9,6 +9,7 @@ Type=simple
 ExecStart=%h/.local/bin/coe serve
 Restart=on-failure
 RestartSec=2
+Environment=XDG_RUNTIME_DIR=%t
 EnvironmentFile=-%h/.config/coe/env
 
 [Install]

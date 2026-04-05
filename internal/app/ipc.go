@@ -4,66 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 
 	"coe/internal/config"
-	"coe/internal/control"
 	dbusipc "coe/internal/ipc/dbus"
 	"coe/internal/scene"
 )
-
-func (a *App) handleControl(_ context.Context, req control.Request) control.Response {
-	switch req.Command {
-	case control.CommandPing:
-		active := a.triggerActive()
-		return control.Response{OK: true, Message: "pong", Active: active}
-	case control.CommandTriggerStart:
-		changed, err := a.triggerStart()
-		if err != nil {
-			return control.Response{OK: false, Message: err.Error()}
-		}
-		return control.Response{
-			OK:      true,
-			Message: pickMessage(changed, "trigger started", "trigger already active"),
-			Active:  a.triggerActive(),
-		}
-	case control.CommandTriggerStop:
-		changed, err := a.triggerStop()
-		if err != nil {
-			return control.Response{OK: false, Message: err.Error()}
-		}
-		return control.Response{
-			OK:      true,
-			Message: pickMessage(changed, "trigger stopped", "trigger already inactive"),
-			Active:  a.triggerActive(),
-		}
-	case control.CommandTriggerToggle:
-		active, err := a.triggerToggle()
-		if err != nil {
-			return control.Response{OK: false, Message: err.Error()}
-		}
-		return control.Response{
-			OK:      true,
-			Message: pickMessage(active, "trigger toggled on", "trigger toggled off"),
-			Active:  active,
-		}
-	case control.CommandTriggerStatus:
-		active := a.triggerActive()
-		return control.Response{
-			OK:      true,
-			Message: pickMessage(active, "trigger active", "trigger inactive"),
-			Active:  active,
-		}
-	default:
-		return control.Response{
-			OK:      false,
-			Message: fmt.Sprintf("unsupported control command %q", req.Command),
-			Active:  a.triggerActive(),
-		}
-	}
-}
 
 func (a *App) Toggle(context.Context) error {
 	_, err := a.triggerToggleFrom("fcitx-module")
@@ -83,6 +30,51 @@ func (a *App) Cancel(context.Context) error {
 func (a *App) Stop(context.Context) error {
 	_, err := a.triggerStopFrom("fcitx-module")
 	return err
+}
+
+func (a *App) TriggerToggle(context.Context) dbusipc.TriggerResponse {
+	active, err := a.triggerToggleFrom("trigger-command")
+	if err != nil {
+		return dbusipc.TriggerResponse{OK: false, Message: err.Error(), Active: a.triggerActive()}
+	}
+	return dbusipc.TriggerResponse{
+		OK:      true,
+		Message: pickMessage(active, "trigger toggled on", "trigger toggled off"),
+		Active:  active,
+	}
+}
+
+func (a *App) TriggerStart(context.Context) dbusipc.TriggerResponse {
+	changed, err := a.triggerStartFrom("trigger-command")
+	if err != nil {
+		return dbusipc.TriggerResponse{OK: false, Message: err.Error(), Active: a.triggerActive()}
+	}
+	return dbusipc.TriggerResponse{
+		OK:      true,
+		Message: pickMessage(changed, "trigger started", "trigger already active"),
+		Active:  a.triggerActive(),
+	}
+}
+
+func (a *App) TriggerStop(context.Context) dbusipc.TriggerResponse {
+	changed, err := a.triggerStopFrom("trigger-command")
+	if err != nil {
+		return dbusipc.TriggerResponse{OK: false, Message: err.Error(), Active: a.triggerActive()}
+	}
+	return dbusipc.TriggerResponse{
+		OK:      true,
+		Message: pickMessage(changed, "trigger stopped", "trigger already inactive"),
+		Active:  a.triggerActive(),
+	}
+}
+
+func (a *App) TriggerStatus(context.Context) dbusipc.TriggerResponse {
+	active := a.triggerActive()
+	return dbusipc.TriggerResponse{
+		OK:      true,
+		Message: pickMessage(active, "trigger active", "trigger inactive"),
+		Active:  active,
+	}
 }
 
 func (a *App) Status(context.Context) dbusipc.Status {

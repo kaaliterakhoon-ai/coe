@@ -11,6 +11,7 @@ type stubHandler struct {
 	startCalls  int
 	cancelCalls int
 	stopCalls   int
+	triggerResp TriggerResponse
 	status      Status
 	runtimeMode string
 	triggerKey  string
@@ -40,6 +41,22 @@ func (h *stubHandler) Cancel(context.Context) error {
 func (h *stubHandler) Stop(context.Context) error {
 	h.stopCalls++
 	return h.err
+}
+
+func (h *stubHandler) TriggerToggle(context.Context) TriggerResponse {
+	return h.triggerResp
+}
+
+func (h *stubHandler) TriggerStart(context.Context) TriggerResponse {
+	return h.triggerResp
+}
+
+func (h *stubHandler) TriggerStop(context.Context) TriggerResponse {
+	return h.triggerResp
+}
+
+func (h *stubHandler) TriggerStatus(context.Context) TriggerResponse {
+	return h.triggerResp
 }
 
 func (h *stubHandler) Status(context.Context) Status {
@@ -108,6 +125,25 @@ func TestDictationObjectStatusReturnsSnapshot(t *testing.T) {
 	}
 	if state != handler.status.State || sessionID != handler.status.SessionID || detail != handler.status.Detail {
 		t.Fatalf("Status() = (%q, %q, %q), want (%q, %q, %q)", state, sessionID, detail, handler.status.State, handler.status.SessionID, handler.status.Detail)
+	}
+}
+
+func TestDictationObjectTriggerToggleReturnsResponse(t *testing.T) {
+	handler := &stubHandler{
+		triggerResp: TriggerResponse{
+			OK:      true,
+			Message: "trigger toggled on",
+			Active:  true,
+		},
+	}
+	object := &dictationObject{handler: handler}
+
+	ok, message, active, err := object.TriggerToggle()
+	if err != nil {
+		t.Fatalf("TriggerToggle() error = %v, want nil", err)
+	}
+	if !ok || !active || message != "trigger toggled on" {
+		t.Fatalf("TriggerToggle() = (%t, %q, %t), want (true, %q, true)", ok, message, active, "trigger toggled on")
 	}
 }
 
