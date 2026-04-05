@@ -6,6 +6,12 @@ Coe 是一个 Linux 桌面上的语音输入工具。
 
 它是对 [`missuo/koe`](https://github.com/missuo/koe) 的 Linux 向致敬。目标没有变：按下热键，说话，让 LLM 整理转写结果，再把文本放回当前应用。
 
+## 演示
+
+![Coe screencast on Linux desktop](../docs/screencast.gif)
+
+演示鸣谢：[@ilovesusu](https://github.com/ilovesusu)
+
 ## 名字
 
 `coe` 故意和 `koe` 很接近（发音也一样）。日语汉字古字 `聲` 的意思就是声音，是这个工具要做的事。

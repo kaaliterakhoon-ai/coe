@@ -10,6 +10,8 @@ It is a Linux-focused tribute to [`missuo/koe`](https://github.com/missuo/koe). 
 
 ![Coe screencast on Linux desktop](./docs/screencast.gif)
 
+Demo credit: [@ilovesusu](https://github.com/ilovesusu)
+
 ## The Name
 
 `coe` is close to `koe` on purpose. This project nods to Koe, but it targets Linux and Wayland. The old kanji `聲` means voice. That is the job.

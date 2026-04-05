@@ -6,6 +6,12 @@ Coe は Linux デスクトップ向けの音声入力ツールです。
 
 これは [`missuo/koe`](https://github.com/missuo/koe) への Linux 向けオマージュです。目標は変わりません。ホットキーを押し、話し、LLM に文字起こしを整えさせ、そのテキストを今使っているアプリに戻します。
 
+## デモ
+
+![Coe screencast on Linux desktop](../docs/screencast.gif)
+
+デモ提供: [@ilovesusu](https://github.com/ilovesusu)
+
 ## 名前
 
 `coe` が `koe` に近いのは意図的です。このプロジェクトは Koe へのオマージュですが、対象は Linux と Wayland です。古い漢字の `聲` は「声」を意味します。それがこのツールの仕事です。
