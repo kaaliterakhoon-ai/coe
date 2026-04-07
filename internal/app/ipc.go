@@ -17,8 +17,18 @@ func (a *App) Toggle(context.Context) error {
 	return err
 }
 
+func (a *App) ToggleWithSelectionEdit(_ context.Context, selectedText string) error {
+	_, err := a.triggerToggleWithSelectionEditFrom("fcitx-module", selectedText)
+	return err
+}
+
 func (a *App) Start(context.Context) error {
 	_, err := a.triggerStartFrom("fcitx-module")
+	return err
+}
+
+func (a *App) StartWithSelectionEdit(_ context.Context, selectedText string) error {
+	_, err := a.triggerStartWithSelectionEditFrom("fcitx-module", selectedText)
 	return err
 }
 
@@ -132,7 +142,17 @@ func (a *App) triggerToggle() (bool, error) {
 }
 
 func (a *App) triggerToggleFrom(source string) (bool, error) {
-	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandToggle, source)
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandToggle, source, nil)
+	if err != nil {
+		return false, err
+	}
+	return response.Active, nil
+}
+
+func (a *App) triggerToggleWithSelectionEditFrom(source, selectedText string) (bool, error) {
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandToggle, source, &selectedTextEditRequest{
+		SelectedText: selectedText,
+	})
 	if err != nil {
 		return false, err
 	}
@@ -144,7 +164,17 @@ func (a *App) triggerStart() (bool, error) {
 }
 
 func (a *App) triggerStartFrom(source string) (bool, error) {
-	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandStart, source)
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandStart, source, nil)
+	if err != nil {
+		return false, err
+	}
+	return response.Changed, nil
+}
+
+func (a *App) triggerStartWithSelectionEditFrom(source, selectedText string) (bool, error) {
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandStart, source, &selectedTextEditRequest{
+		SelectedText: selectedText,
+	})
 	if err != nil {
 		return false, err
 	}
@@ -160,7 +190,7 @@ func (a *App) triggerCancel() (bool, error) {
 }
 
 func (a *App) triggerCancelFrom(source string) (bool, error) {
-	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandCancel, source)
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandCancel, source, nil)
 	if err != nil {
 		return false, err
 	}
@@ -168,7 +198,7 @@ func (a *App) triggerCancelFrom(source string) (bool, error) {
 }
 
 func (a *App) triggerStopFrom(source string) (bool, error) {
-	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandStop, source)
+	response, err := a.executeRuntimeCommand(context.Background(), runtimeCommandStop, source, nil)
 	if err != nil {
 		return false, err
 	}
@@ -243,7 +273,7 @@ func pickMessage(condition bool, yes, no string) string {
 	return no
 }
 
-func (a *App) executeRuntimeCommand(ctx context.Context, kind runtimeCommandType, source string) (runtimeCommandResponse, error) {
+func (a *App) executeRuntimeCommand(ctx context.Context, kind runtimeCommandType, source string, edit *selectedTextEditRequest) (runtimeCommandResponse, error) {
 	if !a.runtimeRunning.Load() {
 		return runtimeCommandResponse{}, errors.New("dictation runtime loop is not ready")
 	}
@@ -251,6 +281,7 @@ func (a *App) executeRuntimeCommand(ctx context.Context, kind runtimeCommandType
 	command := runtimeCommand{
 		Type:   kind,
 		Source: source,
+		Edit:   edit,
 		Reply:  make(chan runtimeCommandResponse, 1),
 	}
 

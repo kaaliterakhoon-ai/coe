@@ -28,7 +28,9 @@ type TriggerResponse struct {
 
 type Handler interface {
 	Toggle(context.Context) error
+	ToggleWithSelectionEdit(context.Context, string) error
 	Start(context.Context) error
+	StartWithSelectionEdit(context.Context, string) error
 	Cancel(context.Context) error
 	Stop(context.Context) error
 	TriggerToggle(context.Context) TriggerResponse
@@ -79,7 +81,19 @@ func ConnectSession(handler Handler) (*Service, error) {
 				Name: DictationInterface,
 				Methods: []introspect.Method{
 					{Name: "Toggle"},
+					{
+						Name: "ToggleWithSelectionEdit",
+						Args: []introspect.Arg{
+							{Name: "selected_text", Type: "s", Direction: "in"},
+						},
+					},
 					{Name: "Start"},
+					{
+						Name: "StartWithSelectionEdit",
+						Args: []introspect.Arg{
+							{Name: "selected_text", Type: "s", Direction: "in"},
+						},
+					},
 					{Name: "Cancel"},
 					{Name: "Stop"},
 					{
@@ -246,8 +260,22 @@ func (o *dictationObject) Toggle() *godbus.Error {
 	return nil
 }
 
+func (o *dictationObject) ToggleWithSelectionEdit(selectedText string) *godbus.Error {
+	if err := o.handler.ToggleWithSelectionEdit(context.Background(), selectedText); err != nil {
+		return godbus.MakeFailedError(err)
+	}
+	return nil
+}
+
 func (o *dictationObject) Start() *godbus.Error {
 	if err := o.handler.Start(context.Background()); err != nil {
+		return godbus.MakeFailedError(err)
+	}
+	return nil
+}
+
+func (o *dictationObject) StartWithSelectionEdit(selectedText string) *godbus.Error {
+	if err := o.handler.StartWithSelectionEdit(context.Background(), selectedText); err != nil {
 		return godbus.MakeFailedError(err)
 	}
 	return nil

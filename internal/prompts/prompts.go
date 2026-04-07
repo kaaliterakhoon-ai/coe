@@ -16,6 +16,8 @@ const (
 	TemplateLLMCorrection         = "llm-correction.tmpl"
 	TemplateLLMCorrectionGeneral  = "llm-correction-general.tmpl"
 	TemplateLLMCorrectionTerminal = "llm-correction-terminal.tmpl"
+	TemplateLLMEditGeneral        = "llm-edit-general.tmpl"
+	TemplateLLMEditTerminal       = "llm-edit-terminal.tmpl"
 	TemplateSceneRouter           = "scene-router.tmpl"
 )
 
@@ -55,6 +57,14 @@ func ResolveLLMCorrectionGeneral(override, overrideFile string, data LLMTemplate
 
 func ResolveLLMCorrectionTerminal(override, overrideFile string, data LLMTemplateData) (string, error) {
 	return ResolveNamed(TemplateLLMCorrectionTerminal, override, overrideFile, data)
+}
+
+func ResolveLLMEditGeneral(override, overrideFile string, data LLMTemplateData) (string, error) {
+	return ResolveNamed(TemplateLLMEditGeneral, override, overrideFile, data)
+}
+
+func ResolveLLMEditTerminal(override, overrideFile string, data LLMTemplateData) (string, error) {
+	return ResolveNamed(TemplateLLMEditTerminal, override, overrideFile, data)
 }
 
 func ResolveSceneRouter(data LLMTemplateData) (string, error) {

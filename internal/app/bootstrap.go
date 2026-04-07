@@ -169,6 +169,29 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	generalEditPrompt, err := llm.ResolvePrompt(cfg.LLM, prompts.TemplateLLMEditGeneral, prompts.LLMTemplateData{
+		Dictionary: renderDictionaryPrompt(personalDictionary, scene.IDGeneral),
+	})
+	if err != nil {
+		return nil, err
+	}
+	generalEditor, err := llm.NewSelectionEditorWithResolvedPrompt(cfg.LLM, generalEditPrompt)
+	if err != nil {
+		return nil, err
+	}
+	terminalEditLLM := cfg.LLM
+	terminalEditLLM.Prompt = ""
+	terminalEditLLM.PromptFile = ""
+	terminalEditPrompt, err := llm.ResolvePrompt(terminalEditLLM, prompts.TemplateLLMEditTerminal, prompts.LLMTemplateData{
+		Dictionary: renderDictionaryPrompt(personalDictionary, scene.IDTerminal),
+	})
+	if err != nil {
+		return nil, err
+	}
+	terminalEditor, err := llm.NewSelectionEditorWithResolvedPrompt(terminalEditLLM, terminalEditPrompt)
+	if err != nil {
+		return nil, err
+	}
 
 	instance := &App{
 		Config:          cfg,
@@ -182,6 +205,10 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		SceneCorrectors: map[string]llm.Corrector{
 			scene.IDGeneral:  generalCorrector,
 			scene.IDTerminal: terminalCorrector,
+		},
+		SceneEditors: map[string]llm.SelectionEditor{
+			scene.IDGeneral:  generalEditor,
+			scene.IDTerminal: terminalEditor,
 		},
 		SceneRouter:     sceneRouter,
 		resourceClosers: resourceClosers,

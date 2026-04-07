@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"coe/internal/audio"
+	"coe/internal/config"
 	"coe/internal/hotkey"
 	"coe/internal/output"
 )
@@ -60,8 +61,9 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 
 	var captureSession audio.CaptureSession
 	var captureSource string
+	var currentEdit *selectedTextEditSession
 
-	handleStart := func(source string) runtimeCommandResponse {
+	handleStart := func(command runtimeCommand) runtimeCommandResponse {
 		if captureSession != nil {
 			return runtimeCommandResponse{Active: true}
 		}
@@ -72,15 +74,34 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			status := a.dictationState.Error(message)
 			a.emitStateChanged(logger, status)
 			a.emitDictationError(logger, status.SessionID, message)
-			logger.Error("recording start failed", "error", err, "source", source)
+			logger.Error("recording start failed", "error", err, "source", command.Source)
 			a.emitNotification(logger, a.notificationForFailure(failureRecordingStart, err))
 			return runtimeCommandResponse{Err: err}
 		}
 
 		captureSession = session
-		captureSource = source
-		a.emitStateChanged(logger, a.dictationState.Recording("recording started"))
-		logger.Info("recording started", "source", source)
+		captureSource = command.Source
+		status := a.dictationState.Recording("recording started")
+		a.emitStateChanged(logger, status)
+		if command.Edit != nil &&
+			config.NormalizeRuntimeMode(a.Config.Runtime.Mode) == config.RuntimeModeFcitx &&
+			command.Source == "fcitx-module" &&
+			command.Edit.SelectedText != "" {
+			currentEdit = &selectedTextEditSession{
+				SessionID:    status.SessionID,
+				SelectedText: command.Edit.SelectedText,
+			}
+		} else {
+			currentEdit = nil
+		}
+		logAttrs := []any{
+			"source", command.Source,
+			"selected_text_edit", currentEdit != nil,
+		}
+		if command.Edit != nil && currentEdit == nil {
+			logAttrs = append(logAttrs, "selected_text_edit_reason", "selection unavailable in current input context")
+		}
+		logger.Info("recording started", logAttrs...)
 		a.emitNotification(logger, a.notificationForStart())
 		return runtimeCommandResponse{Active: true, Changed: true}
 	}
@@ -107,6 +128,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			}
 			logger.Error("recording stop failed", stopAttrs...)
 			a.emitNotification(logger, a.notificationForFailure(failureRecordingStop, err))
+			currentEdit = nil
 			return runtimeCommandResponse{Err: err}
 		}
 		if err != nil {
@@ -141,6 +163,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			a.emitDictationError(logger, status.SessionID, err.Error())
 			logger.Error("pipeline processing failed", "error", err, "source", effectiveSource)
 			a.emitNotification(logger, a.notificationForFailure(failureDictation, err))
+			currentEdit = nil
 			return runtimeCommandResponse{Err: err}
 		}
 		if strings.TrimSpace(processed.Transcript) != "" {
@@ -168,17 +191,33 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 					"source", effectiveSource,
 				)
 				a.emitSceneSwitchedNotification(logger, a.sceneDisplayName(sceneOutcome.Scene))
+				currentEdit = nil
 				return runtimeCommandResponse{Changed: true}
 			}
 
-			processed, err = processor.DeliverResultWithTarget(ctx, processed, focusTarget)
-			if err != nil {
-				status := a.dictationState.Error(err.Error())
-				a.emitStateChanged(logger, status)
-				a.emitDictationError(logger, status.SessionID, err.Error())
-				logger.Error("pipeline processing failed", "error", err, "source", effectiveSource)
-				a.emitNotification(logger, a.notificationForFailure(failureDictation, err))
-				return runtimeCommandResponse{Err: err}
+			if currentEdit != nil {
+				replacement, err := a.applySelectedTextEdit(ctx, activeScene.ID, currentEdit.SelectedText, processed.Corrected)
+				if err != nil {
+					status := a.dictationState.Error(err.Error())
+					a.emitStateChanged(logger, status)
+					a.emitDictationError(logger, status.SessionID, err.Error())
+					logger.Error("selected text edit failed", "error", err, "source", effectiveSource)
+					a.emitNotification(logger, a.notificationForFailure(failureDictation, err))
+					currentEdit = nil
+					return runtimeCommandResponse{Err: err}
+				}
+				processed.Corrected = replacement
+			} else {
+				processed, err = processor.DeliverResultWithTarget(ctx, processed, focusTarget)
+				if err != nil {
+					status := a.dictationState.Error(err.Error())
+					a.emitStateChanged(logger, status)
+					a.emitDictationError(logger, status.SessionID, err.Error())
+					logger.Error("pipeline processing failed", "error", err, "source", effectiveSource)
+					a.emitNotification(logger, a.notificationForFailure(failureDictation, err))
+					currentEdit = nil
+					return runtimeCommandResponse{Err: err}
+				}
 			}
 		}
 		processed.TotalDuration = time.Since(startedAt)
@@ -277,6 +316,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			logger.Warn("paste warning", "warning", processed.Output.PasteWarning)
 		}
 		a.emitNotification(logger, a.notificationForProcessing(processed, effectiveSource))
+		currentEdit = nil
 		return runtimeCommandResponse{Changed: true}
 	}
 
@@ -298,12 +338,14 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			a.emitDictationError(logger, status.SessionID, message)
 			logger.Error("recording cancel failed", "error", err, "source", effectiveSource, "requested_by", source)
 			a.emitNotification(logger, a.notificationForFailure(failureRecordingStop, err))
+			currentEdit = nil
 			return runtimeCommandResponse{Err: err}
 		}
 
 		status := a.dictationState.Idle("recording cancelled")
 		a.emitStateChanged(logger, status)
 		logger.Info("recording cancelled", "source", effectiveSource, "requested_by", source)
+		currentEdit = nil
 		return runtimeCommandResponse{Changed: true}
 	}
 
@@ -327,12 +369,12 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			switch command.Type {
 			case runtimeCommandToggle:
 				if captureSession == nil {
-					response = handleStart(command.Source)
+					response = handleStart(command)
 				} else {
 					response = handleStop(command.Source)
 				}
 			case runtimeCommandStart:
-				response = handleStart(command.Source)
+				response = handleStart(command)
 			case runtimeCommandCancel:
 				response = handleCancel(command.Source)
 			case runtimeCommandStop:
@@ -348,7 +390,7 @@ func (a *App) Serve(ctx context.Context, w io.Writer) error {
 			}
 			switch event.Type {
 			case hotkey.Activated:
-				_ = handleStart("hotkey")
+				_ = handleStart(runtimeCommand{Source: "hotkey"})
 			case hotkey.Deactivated:
 				_ = handleStop("hotkey")
 			default:

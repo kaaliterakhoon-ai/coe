@@ -125,6 +125,47 @@ func TestResolveLLMCorrectionTerminalDefault(t *testing.T) {
 	}
 }
 
+func TestResolveLLMEditGeneralDefault(t *testing.T) {
+	got, err := ResolveLLMEditGeneral("", "", LLMTemplateData{
+		Provider:     "openai",
+		Model:        "gpt-4o-mini",
+		EndpointType: "responses",
+	})
+	if err != nil {
+		t.Fatalf("ResolveLLMEditGeneral() error = %v", err)
+	}
+	for _, fragment := range []string{
+		"rewrite selected text from JSON input",
+		"selected_text",
+		"instruction",
+		"replacement text only",
+	} {
+		if !strings.Contains(got, fragment) {
+			t.Fatalf("general edit prompt missing %q", fragment)
+		}
+	}
+}
+
+func TestResolveLLMEditTerminalDefault(t *testing.T) {
+	got, err := ResolveLLMEditTerminal("", "", LLMTemplateData{
+		Provider:     "openai",
+		Model:        "gpt-4o-mini",
+		EndpointType: "responses",
+	})
+	if err != nil {
+		t.Fatalf("ResolveLLMEditTerminal() error = %v", err)
+	}
+	for _, fragment := range []string{
+		"rewrite selected terminal / shell text from JSON input",
+		"commands, subcommands, flags, paths",
+		"replacement text only",
+	} {
+		if !strings.Contains(got, fragment) {
+			t.Fatalf("terminal edit prompt missing %q", fragment)
+		}
+	}
+}
+
 func TestResolveSceneRouterDefault(t *testing.T) {
 	got, err := ResolveSceneRouter(LLMTemplateData{
 		Provider:     "openai",

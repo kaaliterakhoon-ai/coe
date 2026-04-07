@@ -7,20 +7,22 @@ import (
 )
 
 type stubHandler struct {
-	toggleCalls int
-	startCalls  int
-	cancelCalls int
-	stopCalls   int
-	triggerResp TriggerResponse
-	status      Status
-	runtimeMode string
-	triggerKey  string
-	triggerMode string
-	sceneID     string
-	sceneName   string
-	scenesJSON  string
-	switchScene string
-	err         error
+	toggleCalls              int
+	toggleWithSelectionCalls []string
+	startCalls               int
+	startWithSelectionCalls  []string
+	cancelCalls              int
+	stopCalls                int
+	triggerResp              TriggerResponse
+	status                   Status
+	runtimeMode              string
+	triggerKey               string
+	triggerMode              string
+	sceneID                  string
+	sceneName                string
+	scenesJSON               string
+	switchScene              string
+	err                      error
 }
 
 func (h *stubHandler) Toggle(context.Context) error {
@@ -28,8 +30,18 @@ func (h *stubHandler) Toggle(context.Context) error {
 	return h.err
 }
 
+func (h *stubHandler) ToggleWithSelectionEdit(_ context.Context, selectedText string) error {
+	h.toggleWithSelectionCalls = append(h.toggleWithSelectionCalls, selectedText)
+	return h.err
+}
+
 func (h *stubHandler) Start(context.Context) error {
 	h.startCalls++
+	return h.err
+}
+
+func (h *stubHandler) StartWithSelectionEdit(_ context.Context, selectedText string) error {
+	h.startWithSelectionCalls = append(h.startWithSelectionCalls, selectedText)
 	return h.err
 }
 
@@ -106,6 +118,30 @@ func TestDictationObjectToggleReturnsDBusError(t *testing.T) {
 
 	if err := object.Toggle(); err == nil {
 		t.Fatal("Toggle() error = nil, want D-Bus error")
+	}
+}
+
+func TestDictationObjectToggleWithSelectionEditDelegatesToHandler(t *testing.T) {
+	handler := &stubHandler{}
+	object := &dictationObject{handler: handler}
+
+	if err := object.ToggleWithSelectionEdit("hello"); err != nil {
+		t.Fatalf("ToggleWithSelectionEdit() error = %v, want nil", err)
+	}
+	if len(handler.toggleWithSelectionCalls) != 1 || handler.toggleWithSelectionCalls[0] != "hello" {
+		t.Fatalf("toggleWithSelectionCalls = %#v, want [hello]", handler.toggleWithSelectionCalls)
+	}
+}
+
+func TestDictationObjectStartWithSelectionEditDelegatesToHandler(t *testing.T) {
+	handler := &stubHandler{}
+	object := &dictationObject{handler: handler}
+
+	if err := object.StartWithSelectionEdit("hello"); err != nil {
+		t.Fatalf("StartWithSelectionEdit() error = %v, want nil", err)
+	}
+	if len(handler.startWithSelectionCalls) != 1 || handler.startWithSelectionCalls[0] != "hello" {
+		t.Fatalf("startWithSelectionCalls = %#v, want [hello]", handler.startWithSelectionCalls)
 	}
 }
 

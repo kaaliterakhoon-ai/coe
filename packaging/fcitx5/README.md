@@ -16,6 +16,7 @@ Current scope:
 - dispatches the result back to the Fcitx main event loop
 - shows a small Fcitx panel hint while Coe is listening or processing
 - commits the final text to the current focused input context
+- can replace selected text through voice editing when the current input context exposes a non-empty selection through Fcitx surrounding text
 
 Trigger mode is configured through Coe:
 
@@ -34,6 +35,7 @@ Supported values:
 It does not do these things yet:
 
 - clipboard fallback when no input context exists at commit time
+- selected-text voice editing in controls that do not expose a non-empty selection to Fcitx; in those cases Coe falls back to normal dictation
 
 ## Build
 

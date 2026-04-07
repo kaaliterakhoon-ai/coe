@@ -27,6 +27,7 @@ type App struct {
 	Pipeline        pipeline.Orchestrator
 	SceneState      *scene.State
 	SceneCorrectors map[string]llm.Corrector
+	SceneEditors    map[string]llm.SelectionEditor
 	SceneRouter     llm.Corrector
 	DictationBus    *dbusipc.Service
 	resourceClosers []io.Closer

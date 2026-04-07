@@ -1,11 +1,13 @@
 #include <dbus/dbus.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -23,6 +25,7 @@
 #include <fcitx/instance.h>
 #include <fcitx-utils/key.h>
 #include <fcitx-utils/log.h>
+#include <fcitx-utils/utf8.h>
 
 namespace {
 
@@ -89,6 +92,49 @@ struct TriggerKeyConfig {
     std::string source;
     std::string warning;
 };
+
+struct SelectionEditTarget {
+    fcitx::TrackableObjectReference<fcitx::InputContext> inputContext;
+    unsigned int anchor = 0;
+    unsigned int cursor = 0;
+    std::string selectedText;
+};
+
+struct ActiveSelectionEditTarget {
+    std::string sessionID;
+    SelectionEditTarget target;
+};
+
+std::string selectionTextFromSurrounding(
+    const fcitx::SurroundingText &surrounding) {
+    if (!surrounding.isValid()) {
+        return "";
+    }
+
+    auto selectedText = surrounding.selectedText();
+    if (!selectedText.empty()) {
+        return selectedText;
+    }
+
+    const auto start = std::min(surrounding.anchor(), surrounding.cursor());
+    const auto end = std::max(surrounding.anchor(), surrounding.cursor());
+    if (start == end) {
+        return "";
+    }
+
+    const auto &text = surrounding.text();
+    if (!fcitx::utf8::validate(text)) {
+        return "";
+    }
+    const auto length = fcitx::utf8::lengthValidated(text);
+    if (end > length) {
+        return "";
+    }
+
+    const auto beginIter = fcitx::utf8::nextNChar(text.begin(), start);
+    const auto endIter = fcitx::utf8::nextNChar(text.begin(), end);
+    return std::string(beginIter, endIter);
+}
 
 std::string normalizeModifierToken(const std::string &token) {
     auto lowered = token;
@@ -262,6 +308,16 @@ public:
             fcitx::EventType::InputContextKeyEvent,
             fcitx::EventWatcherPhase::PreInputMethod,
             [this](fcitx::Event &event) { this->handleKeyEvent(event); });
+        surroundingWatcher_ = instance_->watchEvent(
+            fcitx::EventType::InputContextSurroundingTextUpdated,
+            fcitx::EventWatcherPhase::Default,
+            [this](fcitx::Event &event) {
+                this->handleSurroundingTextUpdated(event);
+            });
+        focusOutWatcher_ = instance_->watchEvent(
+            fcitx::EventType::InputContextFocusOut,
+            fcitx::EventWatcherPhase::Default,
+            [this](fcitx::Event &event) { this->handleFocusOut(event); });
         startSignalLoop();
         FCITX_INFO() << "coe-fcitx: module initialized with trigger "
                      << triggerKey_.toString() << " source="
@@ -501,7 +557,13 @@ private:
             auto detailText = std::string(detail ? detail : "");
             FCITX_DEBUG() << "coe-fcitx: state changed to " << stateText;
             appendDebugMarker("state " + stateText);
-            dispatcher_.schedule([this, stateText, detailText]() {
+            auto sessionValue = std::string(sessionID ? sessionID : "");
+            dispatcher_.schedule([this, stateText, sessionValue, detailText]() {
+                if (stateText == "recording") {
+                    this->bindPendingSelectionEdit(sessionValue);
+                } else if (stateText == "idle") {
+                    this->clearSelectionEditTargets();
+                }
                 this->updatePanelState(stateText, detailText);
             });
             return;
@@ -529,8 +591,9 @@ private:
                 " bytes=" +
                 std::to_string(text ? std::string(text).size() : 0));
             auto committedText = std::string(text ? text : "");
-            dispatcher_.schedule([this, committedText]() {
-                this->commitResult(committedText);
+            auto sessionValue = std::string(sessionID ? sessionID : "");
+            dispatcher_.schedule([this, sessionValue, committedText]() {
+                this->commitResult(sessionValue, committedText);
             });
             return;
         }
@@ -554,6 +617,7 @@ private:
             auto errorValue = std::string(errorText ? errorText : "");
             appendDebugMarker("error " + errorValue);
             dispatcher_.schedule([this, errorValue]() {
+                this->activeSelectionEdit_.reset();
                 this->showErrorPanel(errorValue);
             });
         }
@@ -694,11 +758,187 @@ private:
             fcitx::UserInterfaceComponent::InputPanel, true);
     }
 
-    void commitResult(const std::string &text) {
+    std::optional<SelectionEditTarget> captureSelectionEditTarget(
+        fcitx::InputContext *inputContext) {
+        if (!inputContext || !inputContext->hasFocus()) {
+            return std::nullopt;
+        }
+
+        const auto &surrounding = inputContext->surroundingText();
+        if (!surrounding.isValid()) {
+            appendDebugMarker("selection-edit skipped invalid-surrounding");
+            return std::nullopt;
+        }
+
+        const auto selectedText = selectionTextFromSurrounding(surrounding);
+        if (selectedText.empty()) {
+            appendDebugMarker("selection-edit skipped empty-selection anchor=" +
+                              std::to_string(surrounding.anchor()) +
+                              " cursor=" +
+                              std::to_string(surrounding.cursor()));
+            return std::nullopt;
+        }
+
+        SelectionEditTarget target;
+        target.inputContext = inputContext->watch();
+        target.anchor = surrounding.anchor();
+        target.cursor = surrounding.cursor();
+        target.selectedText = selectedText;
+        appendDebugMarker("selection-edit captured bytes=" +
+                          std::to_string(selectedText.size()));
+        return target;
+    }
+
+    std::optional<SelectionEditTarget> cachedSelectionEditTarget(
+        fcitx::InputContext *inputContext) const {
+        if (!cachedSelectionEdit_) {
+            return std::nullopt;
+        }
+        if (!cachedSelectionEdit_->inputContext.isValid()) {
+            return std::nullopt;
+        }
+        if (cachedSelectionEdit_->inputContext.get() != inputContext) {
+            return std::nullopt;
+        }
+        appendDebugMarker("selection-edit using cached target");
+        return cachedSelectionEdit_;
+    }
+
+    void handleSurroundingTextUpdated(fcitx::Event &event) {
+        auto &contextEvent = static_cast<fcitx::InputContextEvent &>(event);
+        auto *inputContext = contextEvent.inputContext();
+        if (!inputContext) {
+            return;
+        }
+
+        auto target = captureSelectionEditTarget(inputContext);
+        if (!target) {
+            if (cachedSelectionEdit_ &&
+                cachedSelectionEdit_->inputContext.get() == inputContext) {
+                cachedSelectionEdit_.reset();
+                appendDebugMarker("selection-edit cache cleared");
+            }
+            return;
+        }
+
+        cachedSelectionEdit_ = *target;
+        appendDebugMarker("selection-edit cache updated bytes=" +
+                          std::to_string(target->selectedText.size()));
+    }
+
+    void handleFocusOut(fcitx::Event &event) {
+        auto &contextEvent = static_cast<fcitx::InputContextEvent &>(event);
+        auto *inputContext = contextEvent.inputContext();
+        if (!inputContext) {
+            return;
+        }
+
+        if (cachedSelectionEdit_ &&
+            cachedSelectionEdit_->inputContext.get() == inputContext) {
+            cachedSelectionEdit_.reset();
+            appendDebugMarker("selection-edit cache cleared focus-out");
+        }
+    }
+
+    void bindPendingSelectionEdit(const std::string &sessionID) {
+        if (!pendingSelectionEdit_) {
+            activeSelectionEdit_.reset();
+            return;
+        }
+
+        activeSelectionEdit_ = ActiveSelectionEditTarget{
+            sessionID,
+            *pendingSelectionEdit_,
+        };
+        pendingSelectionEdit_.reset();
+        appendDebugMarker("selection-edit bound session=" + sessionID);
+    }
+
+    void clearSelectionEditTargets() {
+        pendingSelectionEdit_.reset();
+        activeSelectionEdit_.reset();
+    }
+
+    bool replaceSelectionResult(const ActiveSelectionEditTarget &editTarget,
+                                const std::string &text) {
+        if (text.empty()) {
+            appendDebugMarker("selection-edit replace skipped empty-text");
+            return false;
+        }
+
+        auto *inputContext = editTarget.target.inputContext.get();
+        if (!inputContext || !inputContext->hasFocus()) {
+            appendDebugMarker("selection-edit replace failed no-target");
+            return false;
+        }
+
+        const auto &surrounding = inputContext->surroundingText();
+        if (!surrounding.isValid()) {
+            appendDebugMarker("selection-edit replace failed invalid-surrounding");
+            return false;
+        }
+
+        const auto expectedStart =
+            std::min(editTarget.target.anchor, editTarget.target.cursor);
+        const auto expectedEnd =
+            std::max(editTarget.target.anchor, editTarget.target.cursor);
+        const auto currentStart =
+            std::min(surrounding.anchor(), surrounding.cursor());
+        const auto currentEnd =
+            std::max(surrounding.anchor(), surrounding.cursor());
+
+        if (currentStart != expectedStart || currentEnd != expectedEnd) {
+            appendDebugMarker("selection-edit replace failed selection-range-changed");
+            return false;
+        }
+        if (surrounding.selectedText() != editTarget.target.selectedText) {
+            appendDebugMarker("selection-edit replace failed selection-text-changed");
+            return false;
+        }
+
+        const auto deleteSize = currentEnd - currentStart;
+        if (deleteSize == 0) {
+            appendDebugMarker("selection-edit replace failed empty-selection");
+            return false;
+        }
+
+        const auto cursor = static_cast<int>(surrounding.cursor());
+        const auto offset = static_cast<int>(currentStart) - cursor;
+        fcitx::InputContextEventBlocker blocker(inputContext);
+        inputContext->deleteSurroundingText(offset, deleteSize);
+        inputContext->surroundingText().deleteText(offset, deleteSize);
+        inputContext->commitString(text);
+        appendDebugMarker("selection-edit replace ok bytes=" +
+                          std::to_string(text.size()));
+        return true;
+    }
+
+    void commitResult(const std::string &sessionID, const std::string &text) {
         if (text.empty()) {
             FCITX_WARN() << "coe-fcitx: empty result text";
             appendDebugMarker("commit skipped empty-text");
             return;
+        }
+
+        if (activeSelectionEdit_ &&
+            activeSelectionEdit_->sessionID == sessionID) {
+            const auto replaced =
+                replaceSelectionResult(*activeSelectionEdit_, text);
+            activeSelectionEdit_.reset();
+            if (!replaced) {
+                FCITX_WARN() << "coe-fcitx: selection edit validation failed";
+                showErrorPanel("selection edit target changed");
+                return;
+            }
+
+            FCITX_INFO() << "coe-fcitx: replaced selected text with "
+                         << text.size() << " bytes";
+            return;
+        }
+        if (activeSelectionEdit_ &&
+            activeSelectionEdit_->sessionID != sessionID) {
+            appendDebugMarker("selection-edit cleared stale session");
+            activeSelectionEdit_.reset();
         }
 
         FCITX_DEBUG() << "coe-fcitx: attempting to commit " << text.size()
@@ -775,6 +1015,10 @@ private:
 
         FCITX_DEBUG() << "coe-fcitx: trigger matched for " << triggerKey_.toString();
         appendDebugMarker("trigger press key=" + triggerKey_.toString());
+        auto editTarget = captureSelectionEditTarget(keyEvent.inputContext());
+        if (!editTarget) {
+            editTarget = cachedSelectionEditTarget(keyEvent.inputContext());
+        }
 
         if (triggerMode_ == "hold") {
             if (holding_) {
@@ -782,20 +1026,53 @@ private:
                 keyEvent.filterAndAccept();
                 return;
             }
-            if (!callStart()) {
-                FCITX_WARN() << "coe-fcitx: failed to call Coe Start() over D-Bus";
-                appendDebugMarker("start failed");
-                return;
+            if (editTarget) {
+                pendingSelectionEdit_ = editTarget;
+                if (!callStartWithSelectionEdit(editTarget->selectedText)) {
+                    pendingSelectionEdit_.reset();
+                    FCITX_WARN() << "coe-fcitx: failed to call Coe StartWithSelectionEdit() over D-Bus";
+                    appendDebugMarker("start-with-selection failed");
+                    return;
+                }
+            } else {
+                pendingSelectionEdit_.reset();
+                if (!callStart()) {
+                    FCITX_WARN() << "coe-fcitx: failed to call Coe Start() over D-Bus";
+                    appendDebugMarker("start failed");
+                    return;
+                }
             }
             holding_ = true;
             keyEvent.filterAndAccept();
             return;
         }
 
-        if (!callToggle()) {
-            FCITX_WARN() << "coe-fcitx: failed to call Coe Toggle() over D-Bus";
-            appendDebugMarker("toggle failed");
+        if (dictationState_ == "recording") {
+            pendingSelectionEdit_.reset();
+            if (!callToggle()) {
+                FCITX_WARN() << "coe-fcitx: failed to call Coe Toggle() over D-Bus";
+                appendDebugMarker("toggle failed");
+                return;
+            }
+            keyEvent.filterAndAccept();
             return;
+        }
+
+        if (editTarget) {
+            pendingSelectionEdit_ = editTarget;
+            if (!callToggleWithSelectionEdit(editTarget->selectedText)) {
+                pendingSelectionEdit_.reset();
+                FCITX_WARN() << "coe-fcitx: failed to call Coe ToggleWithSelectionEdit() over D-Bus";
+                appendDebugMarker("toggle-with-selection failed");
+                return;
+            }
+        } else {
+            pendingSelectionEdit_.reset();
+            if (!callToggle()) {
+                FCITX_WARN() << "coe-fcitx: failed to call Coe Toggle() over D-Bus";
+                appendDebugMarker("toggle failed");
+                return;
+            }
         }
 
         keyEvent.filterAndAccept();
@@ -862,9 +1139,66 @@ private:
         return true;
     }
 
+    bool callVoidMethodWithString(const char *methodName,
+                                  const std::string &value) {
+        if (!callBus_) {
+            connectCallBus();
+            if (!callBus_) {
+                return false;
+            }
+        }
+
+        DBusMessage *message = dbus_message_new_method_call(
+            kServiceName, kObjectPath, kInterfaceName, methodName);
+        if (!message) {
+            FCITX_ERROR() << "coe-fcitx: failed to allocate D-Bus message";
+            return false;
+        }
+
+        const char *rawValue = value.c_str();
+        if (!dbus_message_append_args(message, DBUS_TYPE_STRING, &rawValue,
+                                      DBUS_TYPE_INVALID)) {
+            dbus_message_unref(message);
+            FCITX_ERROR() << "coe-fcitx: failed to append D-Bus string argument";
+            return false;
+        }
+
+        DBusError err;
+        dbus_error_init(&err);
+        DBusMessage *reply = dbus_connection_send_with_reply_and_block(
+            callBus_, message, 2000, &err);
+        dbus_message_unref(message);
+
+        if (dbus_error_is_set(&err)) {
+            FCITX_WARN() << "coe-fcitx: " << methodName << "() failed: "
+                         << err.name << " " << err.message;
+            dbus_error_free(&err);
+            return false;
+        }
+        if (!reply) {
+            FCITX_WARN() << "coe-fcitx: " << methodName << "() returned no reply";
+            return false;
+        }
+
+        dbus_message_unref(reply);
+        FCITX_DEBUG() << "coe-fcitx: " << methodName
+                      << "() completed successfully";
+        appendDebugMarker(toLower(std::string(methodName)) + " ok bytes=" +
+                          std::to_string(value.size()));
+        return true;
+    }
+
     bool callToggle() { return callVoidMethod("Toggle"); }
 
+    bool callToggleWithSelectionEdit(const std::string &selectedText) {
+        return callVoidMethodWithString("ToggleWithSelectionEdit", selectedText);
+    }
+
     bool callStart() { return callVoidMethod("Start"); }
+
+    bool callStartWithSelectionEdit(const std::string &selectedText) {
+        return callVoidMethodWithString("StartWithSelectionEdit", selectedText);
+    }
 
     bool callCancel() { return callVoidMethod("Cancel"); }
 
@@ -880,12 +1214,17 @@ private:
     DBusConnection *callBus_ = nullptr;
     DBusConnection *signalBus_ = nullptr;
     std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> keyWatcher_;
+    std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> surroundingWatcher_;
+    std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> focusOutWatcher_;
     std::unique_ptr<fcitx::EventSourceTime> animationTimer_;
     std::unique_ptr<fcitx::EventSourceTime> clearTimer_;
     std::thread signalThread_;
     std::atomic<bool> running_ = false;
     std::string animatedPanelState_;
     size_t panelFrame_ = 0;
+    std::optional<SelectionEditTarget> cachedSelectionEdit_;
+    std::optional<SelectionEditTarget> pendingSelectionEdit_;
+    std::optional<ActiveSelectionEditTarget> activeSelectionEdit_;
 };
 
 class CoeModuleFactory final : public fcitx::AddonFactory {
