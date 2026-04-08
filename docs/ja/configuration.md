@@ -51,6 +51,7 @@ cp config.example.yaml ~/.config/coe/config.yaml
 | `asr.provider` | 配置形態 | 既定の endpoint / model | 補足 |
 | --- | --- | --- | --- |
 | `openai` | Hosted API | `https://api.openai.com/v1/audio/transcriptions` / `gpt-4o-mini-transcribe` | 現在のデフォルト。API キーが必要 |
+| `doubao` | Hosted API | `https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash` / 固定 `bigmodel` | 豆包の録音ファイル高速認識を使います。API キーが必要 |
 | `whispercpp` | ローカル CLI | `whisper-cli` / ローカル `model_path` | `whisper.cpp` を直接使うオフライン経路 |
 | `sensevoice` | セルフホスト HTTP | `http://127.0.0.1:50000/api/v1/asr` / なし | 公式 SenseVoice FastAPI サービスに接続 |
 | `qwen3-asr-vllm` | セルフホスト OpenAI 互換 chat endpoint | `http://127.0.0.1:8000/v1/chat/completions` / `Qwen3-ASR` | WAV 音声を vLLM などの chat completions サーバーに送ります |
@@ -62,6 +63,26 @@ cp config.example.yaml ~/.config/coe/config.yaml
 - model: `gpt-4o-mini-transcribe`
 - 直接キーを書くフィールド: `asr.api_key`
 - 環境変数フィールド: `OPENAI_API_KEY`
+
+Doubao クラウド ASR に切り替えるには:
+
+```yaml
+asr:
+  provider: doubao
+  endpoint: https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash
+  model: ""
+  language: ""
+  prompt: ""
+  api_key: ""
+  api_key_env: DOUBAO_ASR_API_KEY
+```
+
+補足:
+
+- `endpoint` の既定値は公式 Doubao flash 認識エンドポイントです
+- `api_key_env` の既定値は `DOUBAO_ASR_API_KEY` です
+- Coe は毎回 base64 エンコードした WAV を 1 つ送ります
+- この provider は v1 では `model`、`language`、`prompt` を無視します
 
 ローカル `whisper.cpp` に切り替えるには:
 

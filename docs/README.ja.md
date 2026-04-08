@@ -108,7 +108,7 @@ go run ./cmd/coe config init
 
 - デフォルトホットキー: `<Shift><Super>d`
 - デフォルトのホットキー動作は `hotkey.trigger_mode: toggle` です。1 回押して開始、もう 1 回押して終了します。オプションの `hold` は押して開始、離して終了で、`runtime.mode: fcitx` のときだけ有効です
-- サポートする ASR provider: `openai`, `whispercpp`, `sensevoice`, `qwen3-asr-vllm`
+- サポートする ASR provider: `openai`, `doubao`, `whispercpp`, `sensevoice`, `qwen3-asr-vllm`
 - LLM 整形は OpenAI 互換 API 配下の上流モデルをサポートします
 
 ## デスクトップ統合

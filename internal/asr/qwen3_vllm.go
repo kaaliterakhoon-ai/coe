@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -62,7 +61,7 @@ func (c Qwen3ASRVLLMClient) Transcribe(ctx context.Context, capture audio.Result
 		return Result{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if apiKey := resolveOptionalAPIKey(c.APIKey, c.APIKeyEnv); apiKey != "" {
+	if apiKey := resolveOptionalAPIKey(c.APIKey, c.APIKeyEnv, "OPENAI_API_KEY"); apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
@@ -143,17 +142,6 @@ func (c Qwen3ASRVLLMClient) contentWithAudio(audioData string) []qwen3ASRChatCon
 		},
 	})
 	return content
-}
-
-func resolveOptionalAPIKey(explicit, envName string) string {
-	if value := strings.TrimSpace(explicit); value != "" {
-		return value
-	}
-	keyEnv := strings.TrimSpace(envName)
-	if keyEnv == "" {
-		keyEnv = "OPENAI_API_KEY"
-	}
-	return strings.TrimSpace(os.Getenv(keyEnv))
 }
 
 func extractChatMessageText(content any) string {

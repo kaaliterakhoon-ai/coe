@@ -51,6 +51,7 @@ Supported providers:
 | `asr.provider` | Deployment | Default endpoint / model | Notes |
 | --- | --- | --- | --- |
 | `openai` | Hosted API | `https://api.openai.com/v1/audio/transcriptions` / `gpt-4o-mini-transcribe` | Current default; requires API key |
+| `doubao` | Hosted API | `https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash` / fixed `bigmodel` | Uses Doubao file ASR flash; requires API key |
 | `whispercpp` | Local CLI | `whisper-cli` / local `model_path` | Offline path through `whisper.cpp` |
 | `sensevoice` | Self-hosted HTTP | `http://127.0.0.1:50000/api/v1/asr` / none | Talks to the official SenseVoice FastAPI service |
 | `qwen3-asr-vllm` | Self-hosted OpenAI-compatible chat endpoint | `http://127.0.0.1:8000/v1/chat/completions` / `Qwen3-ASR` | Sends WAV audio to a chat-completions server such as vLLM |
@@ -62,6 +63,26 @@ Default profile:
 - model: `gpt-4o-mini-transcribe`
 - direct key field: `asr.api_key`
 - environment field: `OPENAI_API_KEY`
+
+To switch to Doubao cloud ASR:
+
+```yaml
+asr:
+  provider: doubao
+  endpoint: https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash
+  model: ""
+  language: ""
+  prompt: ""
+  api_key: ""
+  api_key_env: DOUBAO_ASR_API_KEY
+```
+
+Notes:
+
+- `endpoint` defaults to the official Doubao flash recognition endpoint
+- `api_key_env` defaults to `DOUBAO_ASR_API_KEY`
+- Coe uploads one base64-encoded WAV per request
+- `model`, `language`, and `prompt` are ignored by this provider in v1
 
 To switch to local `whisper.cpp`:
 

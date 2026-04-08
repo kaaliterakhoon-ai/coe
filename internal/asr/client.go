@@ -20,18 +20,22 @@ type Client interface {
 }
 
 const (
-	ProviderStub            = "stub"
-	ProviderOpenAI          = "openai"
-	ProviderWhisperCPP      = "whispercpp"
-	ProviderSenseVoice      = "sensevoice"
-	ProviderQwen3ASRVLLM    = "qwen3-asr-vllm"
-	ProviderWhisperCPPAlias = "whisper.cpp"
+	ProviderStub             = "stub"
+	ProviderOpenAI           = "openai"
+	ProviderDoubao           = "doubao"
+	ProviderWhisperCPP       = "whispercpp"
+	ProviderSenseVoice       = "sensevoice"
+	ProviderQwen3ASRVLLM     = "qwen3-asr-vllm"
+	ProviderDoubaoFlashAlias = "doubao-flash"
+	ProviderWhisperCPPAlias  = "whisper.cpp"
 )
 
 func NormalizeProviderName(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "", ProviderStub:
 		return ProviderStub
+	case ProviderDoubaoFlashAlias, ProviderDoubao:
+		return ProviderDoubao
 	case ProviderWhisperCPPAlias, ProviderWhisperCPP:
 		return ProviderWhisperCPP
 	default:
@@ -41,7 +45,7 @@ func NormalizeProviderName(value string) string {
 
 func SupportedProvider(value string) bool {
 	switch NormalizeProviderName(value) {
-	case ProviderStub, ProviderOpenAI, ProviderWhisperCPP, ProviderSenseVoice, ProviderQwen3ASRVLLM:
+	case ProviderStub, ProviderOpenAI, ProviderDoubao, ProviderWhisperCPP, ProviderSenseVoice, ProviderQwen3ASRVLLM:
 		return true
 	default:
 		return false
@@ -61,6 +65,12 @@ func NewClient(provider config.ASRConfig) (Client, error) {
 			Language:   provider.Language,
 			Prompt:     provider.Prompt,
 			PromptFile: provider.PromptFile,
+		}, nil
+	case ProviderDoubao:
+		return DoubaoClient{
+			Endpoint:  provider.Endpoint,
+			APIKey:    provider.APIKey,
+			APIKeyEnv: provider.APIKeyEnv,
 		}, nil
 	case ProviderWhisperCPP:
 		return WhisperCPPCLIClient{

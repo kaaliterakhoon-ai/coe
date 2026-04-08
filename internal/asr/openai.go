@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -88,7 +87,7 @@ func (c OpenAIClient) Transcribe(ctx context.Context, capture audio.Result) (Res
 }
 
 func (c OpenAIClient) transcribeOnce(ctx context.Context, wav []byte, language, prompt string) (openAITranscriptionPayload, error) {
-	apiKey, _, err := resolveAPIKey(c.APIKey, c.APIKeyEnv)
+	apiKey, _, err := resolveRequiredAPIKey("OpenAI", c.APIKey, c.APIKeyEnv, "OPENAI_API_KEY")
 	if err != nil {
 		return openAITranscriptionPayload{}, err
 	}
@@ -172,24 +171,6 @@ func (c OpenAIClient) transcribeOnce(ctx context.Context, wav []byte, language, 
 	payload.Raw = strings.TrimSpace(string(data))
 	payload.LanguageHint = language
 	return payload, nil
-}
-
-func resolveAPIKey(explicit, envName string) (string, string, error) {
-	if strings.TrimSpace(explicit) != "" {
-		return strings.TrimSpace(explicit), "config", nil
-	}
-
-	keyEnv := strings.TrimSpace(envName)
-	if keyEnv == "" {
-		keyEnv = "OPENAI_API_KEY"
-	}
-
-	apiKey := strings.TrimSpace(os.Getenv(keyEnv))
-	if apiKey == "" {
-		return "", keyEnv, fmt.Errorf("missing OpenAI API key in %s", keyEnv)
-	}
-
-	return apiKey, keyEnv, nil
 }
 
 type openAITranscriptionPayload struct {

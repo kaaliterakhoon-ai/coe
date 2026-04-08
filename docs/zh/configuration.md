@@ -51,6 +51,7 @@ cp config.example.yaml ~/.config/coe/config.yaml
 | `asr.provider` | 部署方式 | 默认 endpoint / model | 说明 |
 | --- | --- | --- | --- |
 | `openai` | 云端 API | `https://api.openai.com/v1/audio/transcriptions` / `gpt-4o-mini-transcribe` | 当前默认值；需要 API key |
+| `doubao` | 云端 API | `https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash` / 固定 `bigmodel` | 走豆包录音文件极速版识别；需要 API key |
 | `whispercpp` | 本地 CLI | `whisper-cli` / 本地 `model_path` | 通过 `whisper.cpp` 走离线路径 |
 | `sensevoice` | 自托管 HTTP | `http://127.0.0.1:50000/api/v1/asr` / 无 | 对接官方 SenseVoice FastAPI 服务 |
 | `qwen3-asr-vllm` | 自托管 OpenAI 兼容 chat endpoint | `http://127.0.0.1:8000/v1/chat/completions` / `Qwen3-ASR` | 把 WAV 音频发到兼容 chat completions 的服务，比如 vLLM |
@@ -62,6 +63,26 @@ cp config.example.yaml ~/.config/coe/config.yaml
 - model：`gpt-4o-mini-transcribe`
 - 直接写 key 的字段：`asr.api_key`
 - 环境变量字段：`OPENAI_API_KEY`
+
+如果你要切到豆包云端 ASR：
+
+```yaml
+asr:
+  provider: doubao
+  endpoint: https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash
+  model: ""
+  language: ""
+  prompt: ""
+  api_key: ""
+  api_key_env: DOUBAO_ASR_API_KEY
+```
+
+说明：
+
+- `endpoint` 默认就是官方豆包极速版识别接口
+- `api_key_env` 默认是 `DOUBAO_ASR_API_KEY`
+- Coe 每次会上传一个 base64 编码的 WAV
+- 这个 provider 在 v1 里会忽略 `model`、`language` 和 `prompt`
 
 如果你要切到本地 `whisper.cpp`：
 

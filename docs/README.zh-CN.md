@@ -111,7 +111,7 @@ go run ./cmd/coe config init
 - 默认热键：`<Shift><Super>d`
 - 默认热键行为：`hotkey.trigger_mode: toggle`，即按一次开始听写，再按一次结束听写。
   另有可选值为 `hold`，即长按热键开始听写，释放热键结束听写（只在 fcitx 模式下生效）
-- 支持的 ASR provider：`openai`、`whispercpp`、`sensevoice`、`qwen3-asr-vllm`
+- 支持的 ASR provider：`openai`、`doubao`、`whispercpp`、`sensevoice`、`qwen3-asr-vllm`
 - LLM 校正：支持所有 openai 兼容 API 的上游模型
 
 ## 桌面集成

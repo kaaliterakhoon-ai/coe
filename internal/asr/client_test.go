@@ -21,6 +21,11 @@ func TestNormalizeProviderName(t *testing.T) {
 			want:  ProviderWhisperCPP,
 		},
 		{
+			name:  "doubao flash alias is normalized",
+			input: "Doubao-Flash",
+			want:  ProviderDoubao,
+		},
+		{
 			name:  "qwen provider is preserved",
 			input: "qwen3-asr-vllm",
 			want:  ProviderQwen3ASRVLLM,
@@ -44,6 +49,9 @@ func TestSupportedProvider(t *testing.T) {
 
 	if !SupportedProvider(ProviderQwen3ASRVLLM) {
 		t.Fatalf("SupportedProvider(%q) = false, want true", ProviderQwen3ASRVLLM)
+	}
+	if !SupportedProvider(ProviderDoubao) {
+		t.Fatalf("SupportedProvider(%q) = false, want true", ProviderDoubao)
 	}
 	if SupportedProvider("unknown") {
 		t.Fatal(`SupportedProvider("unknown") = true, want false`)

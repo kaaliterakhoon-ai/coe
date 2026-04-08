@@ -329,7 +329,7 @@ func validateASRConfig(cfg config.ASRConfig) doctorCheck {
 	case asr.ProviderStub:
 		return doctorCheck{Name: "ASR provider", OK: true, Detail: "provider=stub; transcription disabled", Problem: ""}
 	case asr.ProviderOpenAI:
-		keySource, keyOK := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv)
+		keySource, keyOK := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv, "OPENAI_API_KEY")
 		modelOK := strings.TrimSpace(cfg.Model) != ""
 		endpoint := nonEmpty(strings.TrimSpace(cfg.Endpoint), "https://api.openai.com/v1/audio/transcriptions")
 		ok := modelOK && keyOK
@@ -343,6 +343,20 @@ func validateASRConfig(cfg config.ASRConfig) doctorCheck {
 			Name:    "ASR provider",
 			OK:      ok,
 			Detail:  fmt.Sprintf("provider=openai; endpoint=%s; model=%s; api_key=%s", endpoint, nonEmpty(cfg.Model, "missing"), keySource),
+			Problem: problem,
+		}
+	case asr.ProviderDoubao:
+		keySource, keyOK := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv, defaultDoubaoASRKeyEnv)
+		endpoint := nonEmpty(strings.TrimSpace(cfg.Endpoint), defaultDoubaoASREndpoint)
+		ok := keyOK
+		problem := ""
+		if !keyOK {
+			problem = "ASR provider=doubao but no API key is available"
+		}
+		return doctorCheck{
+			Name:    "ASR provider",
+			OK:      ok,
+			Detail:  fmt.Sprintf("provider=doubao; endpoint=%s; api_key=%s", endpoint, keySource),
 			Problem: problem,
 		}
 	case asr.ProviderWhisperCPP:
@@ -373,7 +387,7 @@ func validateASRConfig(cfg config.ASRConfig) doctorCheck {
 			Problem: "",
 		}
 	case asr.ProviderQwen3ASRVLLM:
-		keySource, _ := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv)
+		keySource, _ := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv, "OPENAI_API_KEY")
 		endpoint := strings.TrimSpace(cfg.Endpoint)
 		if endpoint == "" {
 			endpoint = "http://127.0.0.1:8000/v1/chat/completions"
@@ -409,7 +423,7 @@ func validateLLMConfig(cfg config.LLMConfig) doctorCheck {
 		return doctorCheck{Name: "LLM provider", OK: true, Detail: "provider=stub; cleanup disabled", Problem: ""}
 	case "openai":
 		endpointType := normalizeEndpointType(cfg.EndpointType)
-		keySource, keyOK := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv)
+		keySource, keyOK := providerAPIKeySource(cfg.APIKey, cfg.APIKeyEnv, "OPENAI_API_KEY")
 		modelOK := strings.TrimSpace(cfg.Model) != ""
 		ok := keyOK && modelOK && (endpointType == "chat" || endpointType == "responses")
 		problem := ""
@@ -625,13 +639,18 @@ func probeDesktopShortcut(ctx context.Context, cfg config.Config) doctorCheck {
 	}
 }
 
-func providerAPIKeySource(explicit, envName string) (string, bool) {
+const (
+	defaultDoubaoASRKeyEnv   = "DOUBAO_ASR_API_KEY"
+	defaultDoubaoASREndpoint = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
+)
+
+func providerAPIKeySource(explicit, envName, defaultEnv string) (string, bool) {
 	if strings.TrimSpace(explicit) != "" {
 		return "config", true
 	}
 	envName = strings.TrimSpace(envName)
 	if envName == "" {
-		envName = "OPENAI_API_KEY"
+		envName = defaultEnv
 	}
 	if strings.TrimSpace(os.Getenv(envName)) != "" {
 		return "env:" + envName, true

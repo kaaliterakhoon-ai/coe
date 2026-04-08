@@ -108,7 +108,7 @@ Quick summary:
 
 - default hotkey: `<Shift><Super>d`
 - default hotkey behavior: `hotkey.trigger_mode: toggle`, meaning press once to start dictation and press again to stop. The optional `hold` mode starts on key press and stops on key release, and only works in `runtime.mode: fcitx`
-- supported ASR providers: `openai`, `whispercpp`, `sensevoice`, `qwen3-asr-vllm`
+- supported ASR providers: `openai`, `doubao`, `whispercpp`, `sensevoice`, `qwen3-asr-vllm`
 - LLM cleanup supports upstream models behind any OpenAI-compatible API
 
 ## Desktop Integration
