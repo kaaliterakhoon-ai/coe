@@ -34,7 +34,7 @@ Coe 是一个 Linux 桌面上的语音输入工具。
    在 `runtime.mode: desktop` 下，GNOME 会通过 custom keyboard shortcut 来执行 `coe trigger toggle`。
 3. 用 `pw-record` 录制麦克风输入。
 4. 拦截接近静音或明显损坏的录音，不发送。
-5. 把音频发送到 ASR。支持 OpenAI, SenseVoice, 或者本地 Whisper.cpp。
+5. 把音频发送到 ASR。支持 `openai`、`doubao`、`sensevoice`、本地 `whisper.cpp`，以及 `qwen3-asr-vllm`。
 6. 可选流程：把 ASR 转写文本发送给 LLM 文本模型做矫正。
 7. 输出上屏：要么通过 Fcitx 直接上屏，要么把文本自动粘贴回当前焦点的 App。
 
@@ -106,6 +106,8 @@ go run ./cmd/coe config init
 
 完整配置说明见 [docs/zh/configuration.md](./zh/configuration.md)。
 
+如果你要接豆包云端 ASR，看 [docs/doubao-asr.md](./doubao-asr.md)。
+
 快速摘要：
 
 - 默认热键：`<Shift><Super>d`
@@ -174,4 +176,5 @@ Portal 权限持久化：
 - [docs/architecture.md](./architecture.md)
 - [docs/fallbacks.md](./fallbacks.md)
 - [docs/gnome-globalshortcuts-matrix.md](./gnome-globalshortcuts-matrix.md)
+- [docs/doubao-asr.md](./doubao-asr.md)
 - [docs/qwen3-asr-vllm.md](./qwen3-asr-vllm.md)

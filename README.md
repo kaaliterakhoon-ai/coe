@@ -34,7 +34,7 @@ The runtime flow is:
    In `runtime.mode: desktop`, GNOME calls `coe trigger toggle` through a custom keyboard shortcut.
 3. Record microphone input with `pw-record`.
 4. Reject near-silent or obviously corrupt captures instead of sending them out.
-5. Send the audio to ASR. Coe supports OpenAI, SenseVoice, or local `whisper.cpp`.
+5. Send the audio to ASR. Coe supports `openai`, `doubao`, `sensevoice`, local `whisper.cpp`, or `qwen3-asr-vllm`.
 6. Optionally send the transcript to an OpenAI-compatible text model for cleanup.
 7. Deliver the final text on screen: either commit it through Fcitx, or paste it back into the focused app.
 
@@ -104,6 +104,8 @@ That writes `~/.config/coe/config.yaml`.
 
 For the full field-by-field reference, see [`docs/configuration.md`](./docs/configuration.md).
 
+For Doubao cloud ASR setup, see [`docs/doubao-asr.md`](./docs/doubao-asr.md).
+
 Quick summary:
 
 - default hotkey: `<Shift><Super>d`
@@ -170,6 +172,8 @@ Portal access persistence:
 - [`docs/architecture.md`](./docs/architecture.md)
 - [`docs/fallbacks.md`](./docs/fallbacks.md)
 - [`docs/gnome-globalshortcuts-matrix.md`](./docs/gnome-globalshortcuts-matrix.md)
+- [`docs/doubao-asr.md`](./docs/doubao-asr.md)
+- [`docs/qwen3-asr-vllm.md`](./docs/qwen3-asr-vllm.md)
 
 ## Star History
 
